@@ -13,9 +13,9 @@ body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg);
 
 /* 針對字體放大需求 */
 h2 { color: var(--primary); margin: 0 0 5px 0; text-align: center; font-size: 1.2rem; }
-table { width: 100%; font-size: 16px; } /* 字體改為與按鈕一樣大 */
+table { width: 100%; font-size: 18px; } /* 字體改為與按鈕一樣大 */
 td { padding: 4px 1px; text-align: center; border-bottom: 1px solid #eee; }
-input[type="number"] { width: 50px; padding: 4px; border: 1px solid #ddd; border-radius: 4px; text-align: center; font-size: 16px; } /* 輸入框字體同步 */
+input[type="number"] { width: 50px; padding: 4px; border: 1px solid #ddd; border-radius: 4px; text-align: center; font-size: 18px; } /* 輸入框字體同步 */
 
 /* 數據面板 */
 .display-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin: 5px 0; }
@@ -117,12 +117,12 @@ function initTable() {
 
 /* ---------------- 門檻與設定 ---------------- */
 function changeThreshold(dir) {
-  const step = parseFloat(document.getElementById('thresholdStep').value) || 0.05;
+  const step = parseFloat(document.getElementById('thresholdStep').value) || 0.01;
   config.threshold = Math.max(0, parseFloat(config.threshold) + (dir * step));
   document.getElementById('thresholdDisplay').innerText = config.threshold.toFixed(2) + " m";
   saveCfg();
 }
-function saveStep(v) { config.thresholdStep = parseFloat(v) || 0.05; saveCfg(); }
+function saveStep(v) { config.thresholdStep = parseFloat(v) || 0.01; saveCfg(); }
 function updateConfig(i, k, v) { config.plan[i][k] = parseInt(v)||0; saveCfg(); }
 function updateLoops(v) { config.loops = parseInt(v)||1; saveCfg(); }
 function saveCfg() { localStorage.setItem('run_config_v2.9', JSON.stringify(config)); calcTotalPlanTime(); }
@@ -279,3 +279,4 @@ window.onload = () => { initTable(); renderHistory(); };
 </script>
 </body>
 </html>
+
