@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>跑步教練 V2.9.2 - 雙音效節拍器</title>
+<title>跑步教練 V2.9.2 - 修正版</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -10,53 +10,30 @@
 :root { --primary: #ff6a00; --bg: #f0f2f5; --card: #ffffff; --danger: #e74c3c; --success: #2ecc71; --info: #3498db; }
 body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: #333; padding: 6px; margin: 0; line-height: 1.1; }
 .card { background: var(--card); border-radius: 10px; padding: 8px; box-shadow: 0 1px 5px rgba(0,0,0,0.05); margin-bottom: 6px; }
-
 h2 { color: var(--primary); margin: 0 0 5px 0; text-align: center; font-size: 1.2rem; }
 table { width: 100%; font-size: 16px; }
 td { padding: 4px 1px; text-align: center; border-bottom: 1px solid #eee; }
 input[type="number"] { width: 50px; padding: 4px; border: 1px solid #ddd; border-radius: 4px; text-align: center; font-size: 16px; }
-
-/* --- 核心優化：大字版里程顯示 --- */
-.dist-hero { 
-  background: #fff8f4; 
-  padding: 15px 5px; 
-  border-radius: 10px; 
-  text-align: center; 
-  border: 2px solid var(--primary); 
-  margin-bottom: 8px;
-}
-.dist-hero-val { 
-  font-size: 3.5rem; 
-  font-weight: 900; 
-  color: var(--primary); 
-  font-family: 'Courier New', monospace;
-  display: block;
-  line-height: 1;
-}
+.dist-hero { background: #fff8f4; padding: 15px 5px; border-radius: 10px; text-align: center; border: 2px solid var(--primary); margin-bottom: 8px; }
+.dist-hero-val { font-size: 3.5rem; font-weight: 900; color: var(--primary); font-family: 'Courier New', monospace; display: block; line-height: 1; }
 .dist-hero-unit { font-size: 1rem; color: #777; margin-top: 4px; display: block; }
-
 .display-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin: 5px 0; }
 .stat-box { background: #fdfdfd; padding: 8px 1px; border-radius: 6px; text-align: center; border: 1px solid #eee; }
 .stat-val { font-size: 18px; font-weight: bold; color: #333; display: block; font-family: monospace; }
 .stat-label { font-size: 11px; color: #888; }
-
 .threshold-ctrl { display: flex; align-items: center; justify-content: space-between; gap: 5px; margin-top: 6px; }
 .btn-adj { background: #f8f8f8; border: 1px solid #ccc; width: 45px; height: 38px; border-radius: 6px; font-size: 20px; font-weight: bold; }
 #thresholdDisplay { font-size: 18px; font-weight: bold; color: var(--primary); flex-grow: 1; text-align: center; }
-
 .btn-main { width: 100%; padding: 12px; border: none; border-radius: 10px; font-size: 16px; font-weight: bold; cursor: pointer; color: white; margin-bottom: 10px; }
 .btn-start { background: var(--primary); }
 .btn-finish { background: var(--success); display: none; }
-
 #mapModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: white; z-index: 9999; flex-direction: column; }
 #map { flex-grow: 1; width: 100%; }
 .map-tools { padding: 8px; display: flex; justify-content: space-between; align-items: center; background: #fff; border-top: 1px solid #ddd; }
 .history-card { background: white; border-radius: 8px; padding: 8px; margin-bottom: 5px; border-left: 4px solid var(--primary); font-size: 14px; }
 .history-btns { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
 .btn-sm { padding: 6px 10px; font-size: 12px; border-radius: 4px; border: none; color: white; cursor: pointer; flex: 1; min-width: 60px; text-align: center; }
-
 #status { text-align: center; font-size: 14px; font-weight: bold; padding: 6px; border-radius: 6px; background: #eee; }
-/* 新增音效指示器樣式 */
 #soundIndicator { text-align: center; font-size: 12px; color: var(--info); margin-top: 4px; font-weight: bold; transition: color 0.3s;}
 </style>
 </head>
@@ -93,7 +70,6 @@ input[type="number"] { width: 50px; padding: 4px; border: 1px solid #ddd; border
     <span id="distance" class="dist-hero-val">0.000</span>
     <span class="dist-hero-unit">KILOMETERS</span>
   </div>
-  
   <div class="display-grid">
     <div class="stat-box"><span class="stat-label">時間</span><span id="elapsed" class="stat-val">00:00</span></div>
     <div class="stat-box"><span class="stat-label">配速</span><span id="pace" class="stat-val">--:--</span></div>
@@ -121,8 +97,7 @@ const DEFAULT_PLAN = [
 let config = JSON.parse(localStorage.getItem('run_config_v2.9')) || { plan: DEFAULT_PLAN, loops: 10, threshold: 0.40, thresholdStep: 0.01 };
 let isRunning = false, elapsedSec = 0, totalDist = 0, lastVibratedKm = 0;
 let watchId = null, timerId = null, trackPoints = [], audioCtx = null, lastPos = null, map = null, polyline = null;
-// --- 新增音效控制變數 ---
-let activeSoundIndex = 0; // 0: 音效A, 1: 音效B
+let activeSoundIndex = 0;
 
 function initTable() {
   document.getElementById('planBody').innerHTML = config.plan.map((s, i) => `
@@ -134,6 +109,12 @@ function initTable() {
   document.getElementById('thresholdDisplay').innerText = parseFloat(config.threshold).toFixed(2) + " m";
   document.getElementById('thresholdStep').value = config.thresholdStep;
   calcTotalPlanTime();
+}
+
+function formatTime(s) {
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return `${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
 }
 
 function changeThreshold(dir) {
@@ -163,18 +144,13 @@ function startGPS() {
         if (d > config.threshold && d < 50) { 
           totalDist += d;
           document.getElementById('distance').innerText = (totalDist/1000).toFixed(3);
-          
           const currentKm = Math.floor(totalDist / 1000);
           if (currentKm > lastVibratedKm) {
-            // --- 滿1公里觸發 ---
             if (navigator.vibrate) navigator.vibrate([500, 200, 500]);
             lastVibratedKm = currentKm;
-            // 切換音效索引 (0變1, 1變0)
             activeSoundIndex = 1 - activeSoundIndex; 
             updateSoundIndicator();
-            // -------------------
           }
-
           if(totalDist > 10) document.getElementById('pace').innerText = formatTime(Math.floor(elapsedSec/(totalDist/1000)));
         }
       }
@@ -184,7 +160,6 @@ function startGPS() {
   }, null, { enableHighAccuracy: true });
 }
 
-// 更新介面上的音效指示
 function updateSoundIndicator() {
     const indicator = document.getElementById('soundIndicator');
     if (activeSoundIndex === 0) {
@@ -203,33 +178,23 @@ function haversine(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
-// --- 修改後的播放音效函式 ---
 function playBeep() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   const o = audioCtx.createOscillator(), g = audioCtx.createGain();
   o.connect(g); g.connect(audioCtx.destination);
-
-  // 根據 activeSoundIndex 決定頻率和波形
   if (activeSoundIndex === 0) {
-      o.frequency.value = 800; // 音效 A: 高音
-      o.type = 'sine';         // 正弦波 (圓潤)
+      o.frequency.value = 800; o.type = 'sine';
   } else {
-      o.frequency.value = 400; // 音效 B: 低音
-      o.type = 'triangle';     // 三角波 (較尖銳/木魚感)
+      o.frequency.value = 400; o.type = 'triangle';
   }
-
   g.gain.value = 0.2;
   o.start(); g.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
   o.stop(audioCtx.currentTime + 0.12);
 }
-// ---------------------------
 
 async function runSession() {
-  // 重置狀態
   isRunning = true; elapsedSec = 0; totalDist = 0; lastVibratedKm = 0; trackPoints = []; lastPos = null;
-  activeSoundIndex = 0; // 每次開始都重置為音效 A
-  updateSoundIndicator();
-  
+  activeSoundIndex = 0; updateSoundIndicator();
   startGPS();
   timerId = setInterval(() => { elapsedSec++; document.getElementById('elapsed').innerText = formatTime(elapsedSec); }, 1000);
   const p = config.plan;
@@ -269,14 +234,7 @@ function stopAndSave() {
   if (watchId) navigator.geolocation.clearWatch(watchId);
   if (totalDist > 0 || elapsedSec > 10) {
     const records = JSON.parse(localStorage.getItem('run_history_v2.9') || "[]");
-    records.unshift({ 
-      id: Date.now(), 
-      date: new Date().toLocaleString(), 
-      dist: (totalDist/1000).toFixed(3), 
-      time: formatTime(elapsedSec), 
-      threshold: config.threshold.toFixed(2),
-      points: trackPoints 
-    });
+    records.unshift({ id: Date.now(), date: new Date().toLocaleString(), dist: (totalDist/1000).toFixed(3), time: formatTime(elapsedSec), threshold: config.threshold.toFixed(2), points: trackPoints });
     localStorage.setItem('run_history_v2.9', JSON.stringify(records));
   }
   location.reload(); 
@@ -289,9 +247,7 @@ function renderHistory() {
       <div style="color:#888; font-size:11px;">📅 ${r.date} | ⏱️ ${r.time}</div>
       <div style="font-weight:bold; margin:4px 0; font-size:16px;">
         🏃 ${r.dist} km 
-        <span style="font-size:11px; color:#ff6a00; font-weight:normal; margin-left:8px; border:1px solid #ff6a00; padding:1px 4px; border-radius:3px;">
-          GPS門檻: ${r.threshold || 'N/A'}m
-        </span>
+        <span style="font-size:11px; color:#ff6a00; font-weight:normal; margin-left:8px; border:1px solid #ff6a00; padding:1px 4px; border-radius:3px;">GPS門檻: ${r.threshold || 'N/A'}m</span>
       </div>
       <div class="history-btns">
         <button class="btn-sm" style="background:var(--info);" onclick="viewTrack(${r.id})">軌跡地圖</button>
@@ -316,10 +272,29 @@ function viewTrack(id) {
   polyline = L.polyline(latlngs, { color: '#ff6a00', weight: 5 }).addTo(map);
   map.fitBounds(polyline.getBounds(), { padding: [30, 30] });
 }
+
 function closeMap() { document.getElementById('mapModal').style.display = 'none'; }
+
 function editDist(id) {
   const records = JSON.parse(localStorage.getItem('run_history_v2.9'));
   const idx = records.findIndex(r => r.id === id);
   const newVal = prompt("修正里程 (km):", records[idx].dist);
   if (newVal) { records[idx].dist = parseFloat(newVal).toFixed(3); localStorage.setItem('run_history_v2.9', JSON.stringify(records)); renderHistory(); }
 }
+
+function deleteRec(id) {
+  if (confirm('確定刪除此紀錄？')) {
+    const records = JSON.parse(localStorage.getItem('run_history_v2.9') || "[]").filter(r => r.id !== id);
+    localStorage.setItem('run_history_v2.9', JSON.stringify(records));
+    renderHistory();
+  }
+}
+
+// 初始化執行
+window.onload = function() {
+  initTable();
+  renderHistory();
+};
+</script>
+</body>
+</html>
