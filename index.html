@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>跑步教練 V2.9</title>
+<title>跑步教練 V2.9.1 - 優化版</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -11,29 +11,44 @@
 body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: #333; padding: 6px; margin: 0; line-height: 1.1; }
 .card { background: var(--card); border-radius: 10px; padding: 8px; box-shadow: 0 1px 5px rgba(0,0,0,0.05); margin-bottom: 6px; }
 
-/* 針對字體放大需求 */
 h2 { color: var(--primary); margin: 0 0 5px 0; text-align: center; font-size: 1.2rem; }
-table { width: 100%; font-size: 16px; } /* 字體改為與按鈕一樣大 */
+table { width: 100%; font-size: 16px; }
 td { padding: 4px 1px; text-align: center; border-bottom: 1px solid #eee; }
-input[type="number"] { width: 50px; padding: 4px; border: 1px solid #ddd; border-radius: 4px; text-align: center; font-size: 16px; } /* 輸入框字體同步 */
+input[type="number"] { width: 50px; padding: 4px; border: 1px solid #ddd; border-radius: 4px; text-align: center; font-size: 16px; }
 
-/* 數據面板 */
-.display-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin: 5px 0; }
-.stat-box { background: #fff8f4; padding: 6px 1px; border-radius: 6px; text-align: center; border: 1px solid #ffe0cc; }
-.stat-val { font-size: 15px; font-weight: bold; color: var(--primary); display: block; font-family: monospace; }
-.stat-label { font-size: 10px; color: #777; }
+/* --- 核心優化：大字版里程顯示 --- */
+.dist-hero { 
+  background: #fff8f4; 
+  padding: 15px 5px; 
+  border-radius: 10px; 
+  text-align: center; 
+  border: 2px solid var(--primary); 
+  margin-bottom: 8px;
+}
+.dist-hero-val { 
+  font-size: 3.5rem; /* 極大字體 */
+  font-weight: 900; 
+  color: var(--primary); 
+  font-family: 'Courier New', monospace;
+  display: block;
+  line-height: 1;
+}
+.dist-hero-unit { font-size: 1rem; color: #777; margin-top: 4px; display: block; }
 
-/* 門檻控制列 - 字體同步放大 */
+/* 剩餘數據調整為三欄 */
+.display-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin: 5px 0; }
+.stat-box { background: #fdfdfd; padding: 8px 1px; border-radius: 6px; text-align: center; border: 1px solid #eee; }
+.stat-val { font-size: 18px; font-weight: bold; color: #333; display: block; font-family: monospace; }
+.stat-label { font-size: 11px; color: #888; }
+
 .threshold-ctrl { display: flex; align-items: center; justify-content: space-between; gap: 5px; margin-top: 6px; }
-.btn-adj { background: #f8f8f8; border: 1px solid #ccc; width: 45px; height: 38px; border-radius: 6px; font-size: 16px; font-weight: bold; }
-#thresholdDisplay { font-size: 16px; font-weight: bold; color: var(--primary); flex-grow: 1; text-align: center; }
+.btn-adj { background: #f8f8f8; border: 1px solid #ccc; width: 45px; height: 38px; border-radius: 6px; font-size: 20px; font-weight: bold; }
+#thresholdDisplay { font-size: 18px; font-weight: bold; color: var(--primary); flex-grow: 1; text-align: center; }
 
-/* 主按鈕 (16px) */
 .btn-main { width: 100%; padding: 12px; border: none; border-radius: 10px; font-size: 16px; font-weight: bold; cursor: pointer; color: white; margin-bottom: 10px; }
 .btn-start { background: var(--primary); }
 .btn-finish { background: var(--success); display: none; }
 
-/* 地圖與歷史 */
 #mapModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: white; z-index: 9999; flex-direction: column; }
 #map { flex-grow: 1; width: 100%; }
 .map-tools { padding: 8px; display: flex; justify-content: space-between; align-items: center; background: #fff; border-top: 1px solid #ddd; }
@@ -57,9 +72,7 @@ input[type="number"] { width: 50px; padding: 4px; border: 1px solid #ddd; border
 
 <div class="card">
   <h2>🏃 訓練設定</h2>
-  <table>
-    <tbody id="planBody"></tbody>
-  </table>
+  <table><tbody id="planBody"></tbody></table>
   <div style="margin-top: 8px; display: flex; align-items: center; justify-content: space-between; font-size: 16px;">
     <div>循環：<input id="loopCount" type="number" oninput="updateLoops(this.value)"></div>
     <div style="font-size:13px;">步進：<input id="thresholdStep" type="number" step="0.01" value="0.05" oninput="saveStep(this.value)" style="width:40px;">m</div>
@@ -74,9 +87,14 @@ input[type="number"] { width: 50px; padding: 4px; border: 1px solid #ddd; border
 </div>
 
 <div class="card">
+  <div class="dist-hero">
+    <span class="stat-label" style="font-size: 14px;">累積公里</span>
+    <span id="distance" class="dist-hero-val">0.000</span>
+    <span class="dist-hero-unit">KILOMETERS</span>
+  </div>
+  
   <div class="display-grid">
     <div class="stat-box"><span class="stat-label">時間</span><span id="elapsed" class="stat-val">00:00</span></div>
-    <div class="stat-box"><span class="stat-label">公里</span><span id="distance" class="stat-val">0.000</span></div>
     <div class="stat-box"><span class="stat-label">配速</span><span id="pace" class="stat-val">--:--</span></div>
     <div class="stat-box"><span class="stat-label">剩餘</span><span id="countdown" class="stat-val">--</span></div>
   </div>
@@ -93,7 +111,6 @@ input[type="number"] { width: 50px; padding: 4px; border: 1px solid #ddd; border
 </div>
 
 <script>
-/* ---------------- 資料處理 ---------------- */
 const DEFAULT_PLAN = [
   { name: '熱身', bpm: 180, sec: 180 }, { name: '間歇', bpm: 200, sec: 60 },
   { name: '衝刺', bpm: 210, sec: 60 }, { name: '恢復', bpm: 190, sec: 120 },
@@ -115,14 +132,13 @@ function initTable() {
   calcTotalPlanTime();
 }
 
-/* ---------------- 門檻與設定 ---------------- */
 function changeThreshold(dir) {
-  const step = parseFloat(document.getElementById('thresholdStep').value) || 0.01;
+  const step = parseFloat(document.getElementById('thresholdStep').value) || 0.05;
   config.threshold = Math.max(0, parseFloat(config.threshold) + (dir * step));
   document.getElementById('thresholdDisplay').innerText = config.threshold.toFixed(2) + " m";
   saveCfg();
 }
-function saveStep(v) { config.thresholdStep = parseFloat(v) || 0.01; saveCfg(); }
+function saveStep(v) { config.thresholdStep = parseFloat(v) || 0.05; saveCfg(); }
 function updateConfig(i, k, v) { config.plan[i][k] = parseInt(v)||0; saveCfg(); }
 function updateLoops(v) { config.loops = parseInt(v)||1; saveCfg(); }
 function saveCfg() { localStorage.setItem('run_config_v2.9', JSON.stringify(config)); calcTotalPlanTime(); }
@@ -132,7 +148,6 @@ function calcTotalPlanTime() {
   document.getElementById('totalPlanTime').innerText = (sec/60).toFixed(1);
 }
 
-/* ---------------- 核心運動邏輯 (含震動) ---------------- */
 function startGPS() {
   if (!navigator.geolocation) return;
   watchId = navigator.geolocation.watchPosition(pos => {
@@ -144,18 +159,11 @@ function startGPS() {
         if (d > config.threshold && d < 50) { 
           totalDist += d;
           document.getElementById('distance').innerText = (totalDist/1000).toFixed(3);
-          
-          // --- 每一公里震動提醒 ---
           const currentKm = Math.floor(totalDist / 1000);
           if (currentKm > lastVibratedKm) {
-            if (navigator.vibrate) {
-              // 震動 pattern: 震 500ms, 停 200ms, 震 500ms
-              navigator.vibrate([500, 200, 500]);
-            }
+            if (navigator.vibrate) navigator.vibrate([500, 200, 500]);
             lastVibratedKm = currentKm;
           }
-          // -----------------------
-
           if(totalDist > 10) document.getElementById('pace').innerText = formatTime(Math.floor(elapsedSec/(totalDist/1000)));
         }
       }
@@ -222,13 +230,40 @@ function stopAndSave() {
   if (watchId) navigator.geolocation.clearWatch(watchId);
   if (totalDist > 0 || elapsedSec > 10) {
     const records = JSON.parse(localStorage.getItem('run_history_v2.9') || "[]");
-    records.unshift({ id: Date.now(), date: new Date().toLocaleString(), dist: (totalDist/1000).toFixed(3), time: formatTime(elapsedSec), points: trackPoints });
+    // 修改處：新增儲存當時的門檻值 (threshold)
+    records.unshift({ 
+      id: Date.now(), 
+      date: new Date().toLocaleString(), 
+      dist: (totalDist/1000).toFixed(3), 
+      time: formatTime(elapsedSec), 
+      threshold: config.threshold.toFixed(2),
+      points: trackPoints 
+    });
     localStorage.setItem('run_history_v2.9', JSON.stringify(records));
   }
   location.reload(); 
 }
 
-/* ---------------- 地圖與歷史 ---------------- */
+function renderHistory() {
+  const records = JSON.parse(localStorage.getItem('run_history_v2.9') || "[]");
+  document.getElementById('historyList').innerHTML = records.map(r => `
+    <div class="history-card">
+      <div style="color:#888; font-size:11px;">📅 ${r.date} | ⏱️ ${r.time}</div>
+      <div style="font-weight:bold; margin:4px 0; font-size:16px;">
+        🏃 ${r.dist} km 
+        <span style="font-size:11px; color:#ff6a00; font-weight:normal; margin-left:8px; border:1px solid #ff6a00; padding:1px 4px; border-radius:3px;">
+          GPS門檻: ${r.threshold || 'N/A'}m
+        </span>
+      </div>
+      <div class="history-btns">
+        <button class="btn-sm" style="background:var(--info);" onclick="viewTrack(${r.id})">軌跡地圖</button>
+        <button class="btn-sm" style="background:var(--success);" onclick="editDist(${r.id})">修正</button>
+        <button class="btn-sm" style="background:var(--danger);" onclick="deleteRec(${r.id})">刪除</button>
+      </div>
+    </div>
+  `).join('');
+}
+
 function viewTrack(id) {
   const r = JSON.parse(localStorage.getItem('run_history_v2.9')).find(r => r.id === id);
   if (!r.points || r.points.length < 2) return alert("紀錄不足");
@@ -244,41 +279,24 @@ function viewTrack(id) {
   map.fitBounds(polyline.getBounds(), { padding: [30, 30] });
 }
 function closeMap() { document.getElementById('mapModal').style.display = 'none'; }
-
-function renderHistory() {
-  const records = JSON.parse(localStorage.getItem('run_history_v2.9') || "[]");
-  document.getElementById('historyList').innerHTML = records.map(r => `
-    <div class="history-card">
-      <div style="color:#888; font-size:11px;">📅 ${r.date} | ⏱️ ${r.time}</div>
-      <div style="font-weight:bold; margin:2px 0;">🏃 ${r.dist} km</div>
-      <div class="history-btns">
-        <button class="btn-sm" style="background:var(--info);" onclick="viewTrack(${r.id})">軌跡地圖</button>
-        <button class="btn-sm" style="background:var(--success);" onclick="editDist(${r.id})">修正</button>
-        <button class="btn-sm" style="background:var(--danger);" onclick="deleteRec(${r.id})">刪除</button>
-      </div>
-    </div>
-  `).join('');
-}
-
 function editDist(id) {
   const records = JSON.parse(localStorage.getItem('run_history_v2.9'));
   const idx = records.findIndex(r => r.id === id);
   const newVal = prompt("修正里程 (km):", records[idx].dist);
   if (newVal) { records[idx].dist = parseFloat(newVal).toFixed(3); localStorage.setItem('run_history_v2.9', JSON.stringify(records)); renderHistory(); }
 }
-
 function deleteRec(id) {
   if (confirm("確定刪除紀錄？")) {
     const records = JSON.parse(localStorage.getItem('run_history_v2.9')).filter(r => r.id !== id);
     localStorage.setItem('run_history_v2.9', JSON.stringify(records)); renderHistory();
   }
 }
-
 function formatTime(s) { return Math.floor(s/60).toString().padStart(2,'0')+":"+(s%60).toString().padStart(2,'0'); }
 window.onload = () => { initTable(); renderHistory(); };
 </script>
 </body>
 </html>
+
 
 
 
