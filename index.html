@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>跑步教練 V2.9.1 - 優化版</title>
+<title>跑步教練 V2.9.2 - 雙音效節拍器</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -26,7 +26,7 @@ input[type="number"] { width: 50px; padding: 4px; border: 1px solid #ddd; border
   margin-bottom: 8px;
 }
 .dist-hero-val { 
-  font-size: 3.5rem; /* 極大字體 */
+  font-size: 3.5rem; 
   font-weight: 900; 
   color: var(--primary); 
   font-family: 'Courier New', monospace;
@@ -35,7 +35,6 @@ input[type="number"] { width: 50px; padding: 4px; border: 1px solid #ddd; border
 }
 .dist-hero-unit { font-size: 1rem; color: #777; margin-top: 4px; display: block; }
 
-/* 剩餘數據調整為三欄 */
 .display-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin: 5px 0; }
 .stat-box { background: #fdfdfd; padding: 8px 1px; border-radius: 6px; text-align: center; border: 1px solid #eee; }
 .stat-val { font-size: 18px; font-weight: bold; color: #333; display: block; font-family: monospace; }
@@ -57,6 +56,8 @@ input[type="number"] { width: 50px; padding: 4px; border: 1px solid #ddd; border
 .btn-sm { padding: 6px 10px; font-size: 12px; border-radius: 4px; border: none; color: white; cursor: pointer; flex: 1; min-width: 60px; text-align: center; }
 
 #status { text-align: center; font-size: 14px; font-weight: bold; padding: 6px; border-radius: 6px; background: #eee; }
+/* 新增音效指示器樣式 */
+#soundIndicator { text-align: center; font-size: 12px; color: var(--info); margin-top: 4px; font-weight: bold; transition: color 0.3s;}
 </style>
 </head>
 <body>
@@ -99,6 +100,7 @@ input[type="number"] { width: 50px; padding: 4px; border: 1px solid #ddd; border
     <div class="stat-box"><span class="stat-label">剩餘</span><span id="countdown" class="stat-val">--</span></div>
   </div>
   <div id="status">準備就緒</div>
+  <div id="soundIndicator">🎵 音效 A (高音)</div>
   <p id="gpsInfo" style="font-size:10px; color:#999; text-align:center; margin-top:4px;">等待 GPS 訊號...</p>
 </div>
 
@@ -119,6 +121,8 @@ const DEFAULT_PLAN = [
 let config = JSON.parse(localStorage.getItem('run_config_v2.9')) || { plan: DEFAULT_PLAN, loops: 10, threshold: 0.40, thresholdStep: 0.01 };
 let isRunning = false, elapsedSec = 0, totalDist = 0, lastVibratedKm = 0;
 let watchId = null, timerId = null, trackPoints = [], audioCtx = null, lastPos = null, map = null, polyline = null;
+// --- 新增音效控制變數 ---
+let activeSoundIndex = 0; // 0: 音效A, 1: 音效B
 
 function initTable() {
   document.getElementById('planBody').innerHTML = config.plan.map((s, i) => `
@@ -159,11 +163,18 @@ function startGPS() {
         if (d > config.threshold && d < 50) { 
           totalDist += d;
           document.getElementById('distance').innerText = (totalDist/1000).toFixed(3);
+          
           const currentKm = Math.floor(totalDist / 1000);
           if (currentKm > lastVibratedKm) {
+            // --- 滿1公里觸發 ---
             if (navigator.vibrate) navigator.vibrate([500, 200, 500]);
             lastVibratedKm = currentKm;
+            // 切換音效索引 (0變1, 1變0)
+            activeSoundIndex = 1 - activeSoundIndex; 
+            updateSoundIndicator();
+            // -------------------
           }
+
           if(totalDist > 10) document.getElementById('pace').innerText = formatTime(Math.floor(elapsedSec/(totalDist/1000)));
         }
       }
@@ -173,6 +184,18 @@ function startGPS() {
   }, null, { enableHighAccuracy: true });
 }
 
+// 更新介面上的音效指示
+function updateSoundIndicator() {
+    const indicator = document.getElementById('soundIndicator');
+    if (activeSoundIndex === 0) {
+        indicator.innerText = "🎵 音效 A (高音)";
+        indicator.style.color = "var(--info)";
+    } else {
+        indicator.innerText = "🎵 音效 B (低音)";
+        indicator.style.color = "var(--primary)";
+    }
+}
+
 function haversine(lat1, lon1, lat2, lon2) {
   const R = 6371000;
   const dLat = (lat2-lat1)*Math.PI/180, dLon = (lon2-lon1)*Math.PI/180;
@@ -180,17 +203,33 @@ function haversine(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
+// --- 修改後的播放音效函式 ---
 function playBeep() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   const o = audioCtx.createOscillator(), g = audioCtx.createGain();
   o.connect(g); g.connect(audioCtx.destination);
-  o.frequency.value = 800; g.gain.value = 0.2;
+
+  // 根據 activeSoundIndex 決定頻率和波形
+  if (activeSoundIndex === 0) {
+      o.frequency.value = 800; // 音效 A: 高音
+      o.type = 'sine';         // 正弦波 (圓潤)
+  } else {
+      o.frequency.value = 400; // 音效 B: 低音
+      o.type = 'triangle';     // 三角波 (較尖銳/木魚感)
+  }
+
+  g.gain.value = 0.2;
   o.start(); g.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
   o.stop(audioCtx.currentTime + 0.12);
 }
+// ---------------------------
 
 async function runSession() {
+  // 重置狀態
   isRunning = true; elapsedSec = 0; totalDist = 0; lastVibratedKm = 0; trackPoints = []; lastPos = null;
+  activeSoundIndex = 0; // 每次開始都重置為音效 A
+  updateSoundIndicator();
+  
   startGPS();
   timerId = setInterval(() => { elapsedSec++; document.getElementById('elapsed').innerText = formatTime(elapsedSec); }, 1000);
   const p = config.plan;
@@ -230,7 +269,6 @@ function stopAndSave() {
   if (watchId) navigator.geolocation.clearWatch(watchId);
   if (totalDist > 0 || elapsedSec > 10) {
     const records = JSON.parse(localStorage.getItem('run_history_v2.9') || "[]");
-    // 修改處：新增儲存當時的門檻值 (threshold)
     records.unshift({ 
       id: Date.now(), 
       date: new Date().toLocaleString(), 
@@ -285,14 +323,3 @@ function editDist(id) {
   const newVal = prompt("修正里程 (km):", records[idx].dist);
   if (newVal) { records[idx].dist = parseFloat(newVal).toFixed(3); localStorage.setItem('run_history_v2.9', JSON.stringify(records)); renderHistory(); }
 }
-function deleteRec(id) {
-  if (confirm("確定刪除紀錄？")) {
-    const records = JSON.parse(localStorage.getItem('run_history_v2.9')).filter(r => r.id !== id);
-    localStorage.setItem('run_history_v2.9', JSON.stringify(records)); renderHistory();
-  }
-}
-function formatTime(s) { return Math.floor(s/60).toString().padStart(2,'0')+":"+(s%60).toString().padStart(2,'0'); }
-window.onload = () => { initTable(); renderHistory(); };
-</script>
-</body>
-</html>
