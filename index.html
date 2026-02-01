@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>跑步教練 V3.0</title>
+<title>跑步教練 V3.1 - 功能回歸版</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -37,6 +37,7 @@ input[type="number"] { width: 50px; padding: 4px; border: 1px solid #ddd; border
 .btn-sm { padding: 6px 4px; font-size: 11px; border-radius: 4px; border: none; color: white; cursor: pointer; flex: 1; min-width: 55px; text-align: center; }
 
 #status { text-align: center; font-size: 14px; font-weight: bold; padding: 6px; border-radius: 6px; background: #eee; }
+#soundIndicator { text-align: center; font-size: 11px; color: var(--info); margin-top: 4px; font-weight: bold; }
 </style>
 </head>
 <body>
@@ -51,7 +52,7 @@ input[type="number"] { width: 50px; padding: 4px; border: 1px solid #ddd; border
 </div>
 
 <div class="card">
-  <h2>🏃 訓練設定 (V3.0)</h2>
+  <h2>🏃 訓練設定 (V3.1)</h2>
   <table><tbody id="planBody"></tbody></table>
   <div style="margin-top: 8px; display: flex; align-items: center; justify-content: space-between; font-size: 16px;">
     <div>循環：<input id="loopCount" type="number" oninput="updateLoops(this.value)"></div>
@@ -74,6 +75,7 @@ input[type="number"] { width: 50px; padding: 4px; border: 1px solid #ddd; border
     <div class="stat-box"><span class="stat-label">剩餘</span><span id="countdown" class="stat-val">--</span></div>
   </div>
   <div id="status">準備就緒</div>
+  <div id="soundIndicator">🎵 音效 A (預設)</div>
   <p id="gpsInfo" style="font-size:10px; color:#999; text-align:center; margin-top:4px;">等待 GPS 訊號...</p>
 </div>
 
@@ -86,12 +88,15 @@ input[type="number"] { width: 50px; padding: 4px; border: 1px solid #ddd; border
 </div>
 
 <script>
-/* ---------------- 資料與設定 ---------------- */
+/* ---------------- 核心變數 ---------------- */
 const DEFAULT_PLAN = [{ name:'熱身',bpm:180,sec:180 },{ name:'200間歇',bpm:200,sec:60 },{ name:'210衝刺',bpm:210,sec:60 },{ name:'190恢復',bpm:190,sec:120 },{ name:'舒緩',bpm:180,sec:180 }];
 let config = JSON.parse(localStorage.getItem('run_config_v3.0')) || { plan: DEFAULT_PLAN, loops: 5, threshold: 0.30, thresholdStep: 0.05 };
 let isRunning = false, elapsedSec = 0, totalDist = 0, lastVibratedKm = 0;
 let watchId = null, timerId = null, trackPoints = [], audioCtx = null, lastPos = null, map = null, polyline = null;
 let startNote = { location: "定位中...", weather: "抓取中..." };
+let activeSoundIndex = 0; // 0: 高音, 1: 低音
+let wakeLock = null;
+let silentLoopId = null;
 
 function initTable() {
   document.getElementById('planBody').innerHTML = config.plan.map((s, i) => `<tr><td style="text-align:left;"><b>${s.name}</b></td><td>BPM <input type="number" value="${s.bpm}" oninput="updateConfig(${i},'bpm',this.value)"></td><td>秒數 <input type="number" value="${s.sec}" oninput="updateConfig(${i},'sec',this.value)"></td></tr>`).join('');
@@ -101,13 +106,25 @@ function initTable() {
   calcTotalPlanTime();
 }
 
-/* ---------------- 智慧核心邏輯 ---------------- */
+/* ---------------- 背景不中斷技術 ---------------- */
+async function requestWakeLock() {
+  if ('wakeLock' in navigator) {
+    try { wakeLock = await navigator.wakeLock.request('screen'); } catch (err) {}
+  }
+}
+
+function playSilentBeep() {
+  if (!audioCtx) return;
+  const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+  o.connect(g); g.connect(audioCtx.destination);
+  g.gain.value = 0.0001; o.start(); o.stop(audioCtx.currentTime + 0.01);
+}
+
+/* ---------------- 里程與 GPS 邏輯 ---------------- */
 async function fetchStartInfo(lat, lon) {
   try {
-    // 1. 抓取地點 (Nominatim)
     fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`, { headers: { 'Accept-Language': 'zh-TW' } })
       .then(res => res.json()).then(data => { startNote.location = data.display_name.split(',')[0] || "未知地點"; });
-    // 2. 抓取天氣 (Open-Meteo)
     fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`)
       .then(res => res.json()).then(data => {
         const w = data.current_weather;
@@ -117,20 +134,38 @@ async function fetchStartInfo(lat, lon) {
   } catch (e) { startNote.location = "連線失敗"; }
 }
 
+function updateSoundIndicator() {
+    const indicator = document.getElementById('soundIndicator');
+    if (activeSoundIndex === 0) {
+        indicator.innerText = "🎵 音效 A (高音)";
+        indicator.style.color = "var(--info)";
+    } else {
+        indicator.innerText = "🎵 音效 B (低音)";
+        indicator.style.color = "var(--primary)";
+    }
+}
+
 function startGPS() {
   if (!navigator.geolocation) return;
   watchId = navigator.geolocation.watchPosition(pos => {
     const { latitude: lat, longitude: lon, accuracy } = pos.coords;
     document.getElementById('gpsInfo').innerText = `精度: ±${Math.round(accuracy)}m | 門檻: ${config.threshold.toFixed(2)}m`;
     if (accuracy < 60) {
-      if (!lastPos) fetchStartInfo(lat, lon); // 第一次穩定定位時抓取天氣與地點
+      if (!lastPos) fetchStartInfo(lat, lon); 
       if (lastPos) {
         const d = haversine(lastPos.lat, lastPos.lon, lat, lon);
         if (d > config.threshold && d < 50) { 
           totalDist += d;
           document.getElementById('distance').innerText = (totalDist/1000).toFixed(3);
+          
+          // --- 功能回歸：每累積 1 公里切換音效 ---
           const curKm = Math.floor(totalDist / 1000);
-          if (curKm > lastVibratedKm) { if (navigator.vibrate) navigator.vibrate([500, 200, 500]); lastVibratedKm = curKm; }
+          if (curKm > lastVibratedKm) { 
+            if (navigator.vibrate) navigator.vibrate([500, 200, 500]); 
+            lastVibratedKm = curKm; 
+            activeSoundIndex = 1 - activeSoundIndex; // 切換節拍頻率
+            updateSoundIndicator();
+          }
           if(totalDist > 10) document.getElementById('pace').innerText = formatTime(Math.floor(elapsedSec/(totalDist/1000)));
         }
       }
@@ -140,21 +175,48 @@ function startGPS() {
   }, null, { enableHighAccuracy: true });
 }
 
+/* ---------------- 音效與訓練流程 ---------------- */
+function playBeep() { 
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); 
+  const o = audioCtx.createOscillator(), g = audioCtx.createGain(); 
+  o.connect(g); g.connect(audioCtx.destination); 
+  
+  // 根據 activeSoundIndex 決定聲音特性
+  if (activeSoundIndex === 0) {
+      o.frequency.value = 800; o.type = 'sine';
+  } else {
+      o.frequency.value = 400; o.type = 'triangle';
+  }
+  
+  g.gain.value = 0.2; o.start(); 
+  g.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1); 
+  o.stop(audioCtx.currentTime + 0.12); 
+}
+
+async function performStage(s, label) { 
+  if (!isRunning) return; 
+  document.getElementById('status').innerText = label; 
+  let rem = s.sec; 
+  const bInt = 60000/s.bpm; 
+  return new Promise(res => { 
+    let t1 = setInterval(() => { rem--; document.getElementById('countdown').innerText = rem>=0?rem:0; if(rem<=0||!isRunning){ clearInterval(t1); res(); }}, 1000); 
+    let t2 = setInterval(() => { if(!isRunning || rem<=0){ clearInterval(t2); return; } playBeep(); }, bInt); 
+  }); 
+}
+
 async function runSession() {
   isRunning = true; elapsedSec = 0; totalDist = 0; lastVibratedKm = 0; trackPoints = []; lastPos = null;
+  activeSoundIndex = 0; updateSoundIndicator();
   startGPS();
   timerId = setInterval(() => { elapsedSec++; document.getElementById('elapsed').innerText = formatTime(elapsedSec); }, 1000);
   const p = config.plan;
   
-  // 智慧判斷：如果秒數 > 0 才執行該階段
   if (p[0].sec > 0) await performStage(p[0], "🏃 熱身中");
-  
   for (let i = 1; i <= config.loops && isRunning; i++) {
     for (let j = 1; j <= 3 && isRunning; j++) {
       if (p[j].sec > 0) await performStage(p[j], `${i}組:${p[j].name}`);
     }
   }
-  
   if (isRunning && p[4].sec > 0) await performStage(p[4], "🚶 舒緩中");
   
   if (isRunning) {
@@ -164,12 +226,35 @@ async function runSession() {
   }
 }
 
-/* ---------------- 基礎功能 ---------------- */
+async function toggleStart() { 
+  if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if(audioCtx.state === 'suspended') audioCtx.resume(); 
+  
+  // --- 功能回歸：背景強化啟動 ---
+  await requestWakeLock();
+  silentLoopId = setInterval(playSilentBeep, 5000);
+
+  document.getElementById('startBtn').style.display='none'; 
+  document.getElementById('finishBtn').style.display='block'; 
+  runSession(); 
+}
+
+function stopAndSave() { 
+  isRunning = false; clearInterval(timerId); 
+  if (silentLoopId) clearInterval(silentLoopId);
+  if (wakeLock !== null) { wakeLock.release().then(() => { wakeLock = null; }); }
+
+  if (watchId) navigator.geolocation.clearWatch(watchId); 
+  if (totalDist > 0 || elapsedSec > 10) { 
+    const records = JSON.parse(localStorage.getItem('run_history_v3.0') || "[]"); 
+    records.unshift({ id: Date.now(), date: new Date().toLocaleString(), dist: (totalDist/1000).toFixed(3), time: formatTime(elapsedSec), points: trackPoints, note: startNote }); 
+    localStorage.setItem('run_history_v3.0', JSON.stringify(records)); 
+  } 
+  location.reload(); 
+}
+
+/* ---------------- 輔助函式 ---------------- */
 function haversine(lat1, lon1, lat2, lon2) { const R = 6371000; const dLat = (lat2-lat1)*Math.PI/180, dLon = (lon2-lon1)*Math.PI/180; const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2; return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); }
-function playBeep() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); const o = audioCtx.createOscillator(), g = audioCtx.createGain(); o.connect(g); g.connect(audioCtx.destination); o.frequency.value = 800; g.gain.value = 0.2; o.start(); g.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1); o.stop(audioCtx.currentTime + 0.12); }
-async function performStage(s, label) { if (!isRunning) return; document.getElementById('status').innerText = label; let rem = s.sec; const bInt = 60000/s.bpm; return new Promise(res => { let t1 = setInterval(() => { rem--; document.getElementById('countdown').innerText = rem>=0?rem:0; if(rem<=0||!isRunning){ clearInterval(t1); res(); }}, 1000); let t2 = setInterval(() => { if(!isRunning || rem<=0){ clearInterval(t2); return; } playBeep(); }, bInt); }); }
-function toggleStart() { if(audioCtx) audioCtx.resume(); document.getElementById('startBtn').style.display='none'; document.getElementById('finishBtn').style.display='block'; runSession(); }
-function stopAndSave() { isRunning = false; clearInterval(timerId); if (watchId) navigator.geolocation.clearWatch(watchId); if (totalDist > 0 || elapsedSec > 10) { const records = JSON.parse(localStorage.getItem('run_history_v3.0') || "[]"); records.unshift({ id: Date.now(), date: new Date().toLocaleString(), dist: (totalDist/1000).toFixed(3), time: formatTime(elapsedSec), points: trackPoints, note: startNote }); localStorage.setItem('run_history_v3.0', JSON.stringify(records)); } location.reload(); }
 function changeThreshold(dir) { const step = parseFloat(document.getElementById('thresholdStep').value)||0.05; config.threshold = Math.max(0, parseFloat(config.threshold)+(dir*step)); document.getElementById('thresholdDisplay').innerText = config.threshold.toFixed(2)+" m"; saveCfg(); }
 function saveStep(v) { config.thresholdStep = parseFloat(v)||0.05; saveCfg(); }
 function updateConfig(i, k, v) { config.plan[i][k] = parseInt(v)||0; saveCfg(); }
@@ -178,7 +263,7 @@ function saveCfg() { localStorage.setItem('run_config_v3.0', JSON.stringify(conf
 function calcTotalPlanTime() { const p = config.plan; const sec = p[0].sec + ((p[1].sec + p[2].sec + p[3].sec) * config.loops) + p[4].sec; document.getElementById('totalPlanTime').innerText = (sec/60).toFixed(1); }
 function formatTime(s) { return Math.floor(s/60).toString().padStart(2,'0')+":"+(s%60).toString().padStart(2,'0'); }
 
-/* ---------------- 歷史與備註 ---------------- */
+/* ---------------- 歷史紀錄與修正功能 ---------------- */
 function renderHistory() {
   const records = JSON.parse(localStorage.getItem('run_history_v3.0') || "[]");
   document.getElementById('historyList').innerHTML = records.map(r => `
@@ -187,18 +272,32 @@ function renderHistory() {
       <div style="font-weight:bold; margin:2px 0;">🏃 ${r.dist} km</div>
       <div class="history-btns">
         <button class="btn-sm" style="background:var(--info);" onclick="viewTrack(${r.id})">軌跡</button>
-        <button class="btn-sm" style="background:var(--note);" onclick="showNote(${r.id})">備註</button>
+        <button class="btn-sm" style="background:var(--note);" onclick="editNote(${r.id})">備註</button>
         <button class="btn-sm" style="background:var(--success);" onclick="editDist(${r.id})">修正</button>
         <button class="btn-sm" style="background:var(--danger);" onclick="deleteRec(${r.id})">刪除</button>
       </div>
     </div>
   `).join('');
 }
-function showNote(id) {
-  const r = JSON.parse(localStorage.getItem('run_history_v3.0')).find(r => r.id === id);
-  const note = r.note || { location: "無資料", weather: "無資料" };
-  alert(`📍 起跑地點：\n${note.location}\n\n🌤️ 天氣氣溫：\n${note.weather}`);
+
+// 修改：支援手動修正備註
+function editNote(id) {
+  const records = JSON.parse(localStorage.getItem('run_history_v3.0'));
+  const idx = records.findIndex(r => r.id === id);
+  let note = records[idx].note || { location: "無資料", weather: "無資料" };
+  
+  const newLoc = prompt("📍 修正起跑地點：", note.location);
+  if (newLoc === null) return; 
+  
+  const newWeather = prompt("🌤️ 修正天氣氣溫：", note.weather);
+  if (newWeather === null) return;
+  
+  records[idx].note = { location: newLoc, weather: newWeather };
+  localStorage.setItem('run_history_v3.0', JSON.stringify(records));
+  alert("✅ 備註已儲存！");
+  renderHistory();
 }
+
 function viewTrack(id) {
   const r = JSON.parse(localStorage.getItem('run_history_v3.0')).find(r => r.id === id);
   if (!r.points || r.points.length < 2) return alert("紀錄不足");
