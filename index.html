@@ -62,7 +62,7 @@ input[type="number"] { width: 50px; padding: 4px; border: 1px solid #ddd; border
   <div class="threshold-ctrl">
     <span style="font-size:13px; font-weight:bold; color:#555;">GPS門檻</span>
     <button class="btn-adj" onclick="changeThreshold(-1)">－</button>
-    <div id="thresholdDisplay">0.30 m</div>
+    <div id="thresholdDisplay">0.32 m</div>
     <button class="btn-adj" onclick="changeThreshold(1)">＋</button>
   </div>
 </div>
@@ -90,7 +90,7 @@ input[type="number"] { width: 50px; padding: 4px; border: 1px solid #ddd; border
 <script>
 /* ---------------- 核心變數 ---------------- */
 const DEFAULT_PLAN = [{ name:'熱身',bpm:180,sec:180 },{ name:'200間歇',bpm:200,sec:60 },{ name:'210衝刺',bpm:210,sec:60 },{ name:'190恢復',bpm:190,sec:120 },{ name:'舒緩',bpm:180,sec:180 }];
-let config = JSON.parse(localStorage.getItem('run_config_v3.0')) || { plan: DEFAULT_PLAN, loops: 5, threshold: 0.30, thresholdStep: 0.05 };
+let config = JSON.parse(localStorage.getItem('run_config_v3.0')) || { plan: DEFAULT_PLAN, loops: 5, threshold: 0.32, thresholdStep: 0.01 };
 let isRunning = false, elapsedSec = 0, totalDist = 0, lastVibratedKm = 0;
 let watchId = null, timerId = null, trackPoints = [], audioCtx = null, lastPos = null, map = null, polyline = null;
 let startNote = { location: "定位中...", weather: "抓取中..." };
