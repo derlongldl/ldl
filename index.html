@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>跑步教練 V3.9 - 穩定修復版</title>
+<title>跑步教練 V4.0 - 設定修復版</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -10,6 +10,7 @@
 :root { --primary: #ff6a00; --bg: #f0f2f5; --card: #ffffff; --danger: #e74c3c; --success: #2ecc71; --info: #3498db; }
 body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); margin: 0; padding: 5px; }
 .card { background: var(--card); border-radius: 12px; padding: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 10px; }
+h2 { text-align:center; color:var(--primary); margin:5px 0; font-size: 1.3rem; }
 
 /* 儀表板模式 */
 #trainingOverlay {
@@ -17,101 +18,93 @@ body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg);
   background: #000; color: #fff; z-index: 10000; flex-direction: column;
   justify-content: center; align-items: center; text-align: center;
 }
-.big-val { font-size: 6rem; font-weight: 900; color: var(--primary); font-family: monospace; line-height: 1.1; }
+.big-val { font-size: 5.5rem; font-weight: 900; color: var(--primary); font-family: monospace; line-height: 1.1; }
 .small-grid { display: flex; width: 100%; justify-content: space-around; margin-top: 20px; }
-.small-val { font-size: 3rem; color: #fff; font-family: monospace; font-weight: bold; }
-.label { font-size: 1rem; color: #888; }
-
-#miniMapLayer { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 10001; background: #fff; }
-#miniMap { width: 100%; height: calc(100% - 70px); }
-
-.btn-group { display: flex; gap: 10px; width: 90%; margin-top: 30px; }
-.btn-ui { flex: 1; padding: 15px; border: none; border-radius: 12px; font-size: 1.2rem; font-weight: bold; color: white; }
+.small-val { font-size: 2.8rem; color: #fff; font-family: monospace; font-weight: bold; }
+.label { font-size: 0.9rem; color: #888; }
 
 /* 設定介面樣式 */
-table { width: 100%; border-collapse: collapse; }
-td { padding: 6px 2px; border-bottom: 1px solid #eee; text-align: center; font-size: 15px; }
-input { width: 50px; padding: 5px; text-align: center; border: 1px solid #ccc; border-radius: 4px; font-size: 1rem; }
-.btn-start { width: 100%; padding: 18px; background: var(--primary); border: none; border-radius: 12px; color: white; font-size: 1.4rem; font-weight: bold; margin-top: 10px; }
+.plan-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #eee; }
+.plan-row b { flex: 1; }
+.plan-row div { flex: 2; display: flex; gap: 5px; justify-content: flex-end; }
+input { width: 55px; padding: 6px; text-align: center; border: 1px solid #ccc; border-radius: 5px; font-size: 1rem; }
+.btn-start { width: 100%; padding: 18px; background: var(--primary); border: none; border-radius: 12px; color: white; font-size: 1.4rem; font-weight: bold; margin-top: 15px; cursor: pointer; }
 
-/* 歷史紀錄樣式 */
+/* 歷史紀錄 */
 .history-card { 
   background: white; border-radius: 10px; padding: 12px; margin-bottom: 8px; 
   border-left: 5px solid var(--primary); display: flex; justify-content: space-between; align-items: center;
 }
-.btn-del { background: var(--danger); color: white; border: none; padding: 8px 12px; border-radius: 6px; font-size: 13px; cursor: pointer; }
+.btn-del { background: var(--danger); color: white; border: none; padding: 8px 12px; border-radius: 6px; font-size: 13px; }
 </style>
 </head>
 <body>
 
 <div id="trainingOverlay">
-  <div style="position: absolute; top: 15px; color: var(--success); font-size: 0.9rem;">● GPS 追蹤中</div>
+  <div style="position: absolute; top: 15px; color: var(--success); font-size: 0.9rem;">● 訓練進行中 (請勿手動關閉螢幕)</div>
   <div class="label">累積公里 KM</div>
   <div id="bigDistance" class="big-val">0.000</div>
   <div class="small-grid">
     <div><div class="label">配速</div><div id="bigPace" class="small-val">--:--</div></div>
     <div><div class="label">時間</div><div id="bigElapsed" class="small-val">00:00</div></div>
   </div>
-  <div class="btn-group">
-    <button class="btn-ui" style="background:var(--info);" onclick="showMiniMap()">地圖</button>
-    <button class="btn-ui" style="background:var(--danger);" onclick="stopAndSave()">結束</button>
-  </div>
-</div>
-
-<div id="miniMapLayer">
-  <div id="miniMap"></div>
-  <button style="width:100%; padding:20px; background:var(--primary); color:#fff; border:none; font-size:1.2rem;" onclick="hideMiniMap()">返回</button>
+  <button class="btn-start" style="width: 80%; background: var(--danger);" onclick="stopAndSave()">結束並儲存</button>
 </div>
 
 <div class="card">
-  <h2 style="text-align:center; color:var(--primary); margin:5px 0;">🏃 訓練設定 V3.9</h2>
-  <table id="planTable">
-      </table>
-  <div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px; font-size:14px;">
+  <h2>🏃 跑步教練 V4.0</h2>
+  <div id="planContainer"></div>
+  
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-top:15px; font-size:14px; background:#f9f9f9; padding:10px; border-radius:8px;">
     <span>循環：<input id="loopCount" type="number" onchange="updateLoops(this.value)"></span>
-    <span>步進：<input id="thresholdStep" type="number" step="0.01" style="width:40px;" onchange="updateStep(this.value)">m</span>
+    <span>步進：<input id="thresholdStep" type="number" step="0.01" style="width:45px;" onchange="updateStep(this.value)"></span>
     <span>預計 <b id="totalPlanTime" style="color:var(--primary)">0</b> 分</span>
   </div>
-  <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
+
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-top:15px; padding: 0 5px;">
     <span style="font-weight:bold;">GPS門檻：<span id="thresholdDisplay" style="color:var(--primary)">0.30</span>m</span>
-    <div style="display:flex; gap:5px;">
-        <button style="padding:8px 15px;" onclick="adjThres(-1)">門檻 －</button>
-        <button style="padding:8px 15px;" onclick="adjThres(1)">門檻 ＋</button>
+    <div style="display:flex; gap:10px;">
+        <button style="padding:10px 20px; border-radius:8px; border:1px solid #ccc;" onclick="adjThres(-1)">－</button>
+        <button style="padding:10px 20px; border-radius:8px; border:1px solid #ccc;" onclick="adjThres(1)">＋</button>
     </div>
   </div>
+  
   <button onclick="toggleStart()" class="btn-start">開始訓練</button>
 </div>
 
-<div id="historyList" style="margin-top: 10px;">
-    <strong style="display:block; margin: 0 0 8px 5px;">歷史紀錄</strong>
+<div id="historyList" style="margin-top: 15px; padding: 0 5px;">
+    <strong style="display:block; margin-bottom:10px;">歷史紀錄</strong>
     <div id="historyContainer"></div>
 </div>
 
 <script>
-// 使用相容性較高的路徑
-const HISTORY_KEY = 'run_history_v3.0'; 
-const CONFIG_KEY = 'run_config_v3.9';
+const DB_KEY = 'run_coach_data_v4'; // 統一使用新的 Key 避免版本衝突
 
-let config = JSON.parse(localStorage.getItem(CONFIG_KEY)) || { 
+let config = JSON.parse(localStorage.getItem(DB_KEY + '_config')) || { 
   plan: [{name:'熱身',bpm:180,sec:180},{name:'間歇',bpm:205,sec:60},{name:'衝刺',bpm:215,sec:60},{name:'恢復',bpm:195,sec:120},{name:'舒緩',bpm:180,sec:180}],
   loops: 5, threshold: 0.32, step: 0.01
 };
 
-let isRunning = false, totalDist = 0, elapsedSec = 0, watchId = null, timerId = null, lastPos = null, trackPoints = [], audioCtx = null, wakeLock = null;
+let isRunning = false, totalDist = 0, elapsedSec = 0, watchId = null, timerId = null, lastPos = null, audioCtx = null, wakeLock = null;
 
-// 初始化函數：負責把設定值填入畫面上半部
+// 初始化函數：把畫面長出來
 function init() {
-  const table = document.getElementById('planTable');
-  table.innerHTML = config.plan.map((s, i) => `
-    <tr>
-      <td style="text-align:left;"><b>${s.name}</b></td>
-      <td>BPM <input type="number" value="${s.bpm}" onchange="updateCfg(${i},'bpm',this.value)"></td>
-      <td>秒 <input type="number" value="${s.sec}" onchange="updateCfg(${i},'sec',this.value)"></td>
-    </tr>`).join('');
+  const container = document.getElementById('planContainer');
+  if (!container) return;
+
+  container.innerHTML = config.plan.map((s, i) => `
+    <div class="plan-row">
+      <b>${s.name}</b>
+      <div>
+        <span>BPM <input type="number" value="${s.bpm}" onchange="updateCfg(${i},'bpm',this.value)"></span>
+        <span>秒 <input type="number" value="${s.sec}" onchange="updateCfg(${i},'sec',this.value)"></span>
+      </div>
+    </div>`).join('');
     
   document.getElementById('loopCount').value = config.loops;
   document.getElementById('thresholdStep').value = config.step;
   document.getElementById('thresholdDisplay').innerText = config.threshold.toFixed(2);
+  
   calcTotalTime();
   renderHistory();
 }
@@ -119,7 +112,7 @@ function init() {
 async function requestWakeLock() { if ('wakeLock' in navigator) { try { wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {} } }
 
 function playBeep() {
-  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (!audioCtx) audioCtx = new AudioContext();
   const o = audioCtx.createOscillator(), g = audioCtx.createGain();
   o.connect(g); g.connect(audioCtx.destination);
   o.frequency.value = 850; g.gain.value = 0.3;
@@ -129,4 +122,22 @@ function playBeep() {
 
 function startGPS() {
   watchId = navigator.geolocation.watchPosition(pos => {
-    const { latitude: lat, longitude: lon, accuracy }
+    const { latitude: lat, longitude: lon, accuracy } = pos.coords;
+    if (accuracy < 60) {
+      if (lastPos) {
+        const d = haversine(lastPos.lat, lastPos.lon, lat, lon);
+        if (d > config.threshold && d < 50) {
+          totalDist += d;
+          document.getElementById('bigDistance').innerText = (totalDist/1000).toFixed(3);
+          if(totalDist > 10) document.getElementById('bigPace').innerText = formatTime(Math.floor(elapsedSec/(totalDist/1000)));
+        }
+      }
+      lastPos = { lat, lon };
+    }
+  }, null, { enableHighAccuracy: true });
+}
+
+async function toggleStart() {
+  if (!audioCtx) audioCtx = new AudioContext();
+  await requestWakeLock();
+  document.getElementById
