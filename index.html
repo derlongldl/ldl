@@ -2,57 +2,53 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>跑步教練 V3.6 - 終極穩定版</title>
+<title>跑步教練 V3.7 - 穩定修復版</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
 :root { --primary: #ff6a00; --bg: #f0f2f5; --card: #ffffff; --danger: #e74c3c; --success: #2ecc71; --info: #3498db; }
 body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); margin: 0; padding: 5px; }
-.card { background: var(--card); border-radius: 12px; padding: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 8px; }
+.card { background: var(--card); border-radius: 12px; padding: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 10px; }
 
-/* 儀表板 = 偽黑屏模式 */
+/* 儀表板模式 */
 #trainingOverlay {
   display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
   background: #000; color: #fff; z-index: 10000; flex-direction: column;
   justify-content: center; align-items: center; text-align: center;
 }
-.big-val { font-size: 6.5rem; font-weight: 900; color: var(--primary); font-family: monospace; line-height: 1; }
-.small-grid { display: flex; width: 100%; justify-content: space-around; margin-top: 30px; }
-.small-val { font-size: 3.2rem; color: #fff; font-family: monospace; font-weight: bold; }
+.big-val { font-size: 6rem; font-weight: 900; color: var(--primary); font-family: monospace; line-height: 1.1; }
+.small-grid { display: flex; width: 100%; justify-content: space-around; margin-top: 20px; }
+.small-val { font-size: 3rem; color: #fff; font-family: monospace; font-weight: bold; }
 .label { font-size: 1rem; color: #888; }
 
 #miniMapLayer { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 10001; background: #fff; }
 #miniMap { width: 100%; height: calc(100% - 70px); }
 
-.btn-group { display: flex; gap: 10px; width: 90%; margin-top: 40px; }
-.btn-ui { flex: 1; padding: 18px; border: none; border-radius: 15px; font-size: 1.2rem; font-weight: bold; color: white; }
-.btn-start { width: 100%; padding: 18px; background: var(--primary); border: none; border-radius: 12px; color: white; font-size: 1.4rem; font-weight: bold; }
+.btn-group { display: flex; gap: 10px; width: 90%; margin-top: 30px; }
+.btn-ui { flex: 1; padding: 15px; border: none; border-radius: 12px; font-size: 1.2rem; font-weight: bold; color: white; }
 
-/* 設定區表格 */
+/* 設定介面樣式 */
 table { width: 100%; border-collapse: collapse; }
 td { padding: 6px 2px; border-bottom: 1px solid #eee; text-align: center; }
-input { width: 50px; padding: 5px; text-align: center; border: 1px solid #ccc; border-radius: 4px; }
+input { width: 50px; padding: 5px; text-align: center; border: 1px solid #ccc; border-radius: 4px; font-size: 1rem; }
+.btn-start { width: 100%; padding: 18px; background: var(--primary); border: none; border-radius: 12px; color: white; font-size: 1.4rem; font-weight: bold; margin-top: 10px; }
+.history-card { background: white; border-radius: 10px; padding: 10px; margin-bottom: 8px; border-left: 5px solid var(--primary); font-size: 14px; }
 </style>
 </head>
 <body>
 
 <div id="trainingOverlay">
   <div style="position: absolute; top: 15px; color: var(--success); font-size: 0.9rem;">● GPS 追蹤中 (請勿手動關閉螢幕)</div>
-  
-  <div style="margin-bottom: 10px;">
-    <div class="label">累積公里 KM</div>
-    <div id="bigDistance" class="big-val">0.000</div>
-  </div>
-
+  <div class="label">累積公里 KM</div>
+  <div id="bigDistance" class="big-val">0.000</div>
   <div class="small-grid">
     <div><div class="label">配速</div><div id="bigPace" class="small-val">--:--</div></div>
     <div><div class="label">時間</div><div id="bigElapsed" class="small-val">00:00</div></div>
   </div>
-
   <div class="btn-group">
     <button class="btn-ui" style="background:var(--info);" onclick="showMiniMap()">看地圖</button>
-    <button class="btn-ui" style="background:var(--danger);" onclick="stopAndSave()">結束</button>
+    <button class="btn-ui" style="background:var(--danger);" onclick="stopAndSave()">結束訓練</button>
   </div>
 </div>
 
@@ -62,47 +58,56 @@ input { width: 50px; padding: 5px; text-align: center; border: 1px solid #ccc; b
 </div>
 
 <div class="card">
-  <h2 style="text-align:center; color:var(--primary); margin:5px 0;">🏃 訓練設定 V3.6</h2>
+  <h2 style="text-align:center; color:var(--primary); margin:5px 0;">🏃 訓練設定 V3.7</h2>
   <table id="planTable"></table>
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px; font-size:14px;">
+    <span>循環：<input id="loopCount" type="number" onchange="updateLoops(this.value)"></span>
+    <span>步進：<input id="thresholdStep" type="number" step="0.01" style="width:40px;" onchange="updateStep(this.value)">m</span>
+    <span>預計 <b id="totalPlanTime" style="color:var(--primary)">0</b> 分</span>
+  </div>
   <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
-    <span>循環：<input id="loopCount" type="number"></span>
-    <span style="font-size:13px;">GPS門檻：<b id="thresholdDisplay" style="color:var(--primary)">0.30</b>m</span>
-    <span style="font-size:12px;">步進：<input id="thresholdStep" type="number" step="0.01" style="width:40px;"></span>
+    <span style="font-weight:bold;">GPS門檻：<span id="thresholdDisplay" style="color:var(--primary)">0.30</span>m</span>
+    <div style="display:flex; gap:5px;">
+        <button style="padding:8px 15px;" onclick="adjThres(-1)">門檻 －</button>
+        <button style="padding:8px 15px;" onclick="adjThres(1)">門檻 ＋</button>
+    </div>
   </div>
-  <div style="display:flex; gap:5px; margin-top:10px;">
-    <button style="flex:1; padding:10px;" onclick="adjThres(-1)">門檻 －</button>
-    <button style="flex:1; padding:10px;" onclick="adjThres(1)">門檻 ＋</button>
-  </div>
-  <button onclick="toggleStart()" class="btn-start" style="margin-top:15px;">開始訓練</button>
+  <button onclick="toggleStart()" class="btn-start">開始訓練</button>
 </div>
 
-<div id="historyList" style="margin-top: 10px;"></div>
+<div id="historyList" style="margin-top: 10px;">
+    <strong style="display:block; margin-bottom:8px;">歷史紀錄</strong>
+    <div id="historyContainer"></div>
+</div>
 
 <script>
-let config = JSON.parse(localStorage.getItem('run_config_v3.6')) || { 
+// 使用與之前版本相容的 Key，確保紀錄不會消失
+const STORAGE_KEY = 'run_history_v2.9'; 
+const CONFIG_KEY = 'run_config_v3.7';
+
+let config = JSON.parse(localStorage.getItem(CONFIG_KEY)) || { 
   plan: [{name:'熱身',bpm:180,sec:180},{name:'間歇',bpm:205,sec:60},{name:'衝刺',bpm:215,sec:60},{name:'恢復',bpm:195,sec:120},{name:'舒緩',bpm:180,sec:180}],
   loops: 5, threshold: 0.32, step: 0.01
 };
+
 let isRunning = false, totalDist = 0, elapsedSec = 0, watchId = null, timerId = null, lastPos = null, trackPoints = [], audioCtx = null, wakeLock = null, liveMap = null, livePoly = null;
 
 function init() {
-  document.getElementById('planTable').innerHTML = config.plan.map((s, i) => `<tr><td style="text-align:left;">${s.name}</td><td>BPM <input type="number" value="${s.bpm}" onchange="updateCfg(${i},'bpm',this.value)"></td><td>秒 <input type="number" value="${s.sec}" onchange="updateCfg(${i},'sec',this.value)"></td></tr>`).join('');
+  document.getElementById('planTable').innerHTML = config.plan.map((s, i) => `<tr><td style="text-align:left;"><b>${s.name}</b></td><td>BPM <input type="number" value="${s.bpm}" onchange="updateCfg(${i},'bpm',this.value)"></td><td>秒 <input type="number" value="${s.sec}" onchange="updateCfg(${i},'sec',this.value)"></td></tr>`).join('');
   document.getElementById('loopCount').value = config.loops;
-  document.getElementById('thresholdDisplay').innerText = config.threshold.toFixed(2);
   document.getElementById('thresholdStep').value = config.step;
+  document.getElementById('thresholdDisplay').innerText = config.threshold.toFixed(2);
+  calcTotalTime();
   renderHistory();
 }
 
-// 關鍵：保持螢幕開啟
 async function requestWakeLock() { if ('wakeLock' in navigator) { try { wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {} } }
 
-function playBeep(type) {
+function playBeep() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   const o = audioCtx.createOscillator(), g = audioCtx.createGain();
   o.connect(g); g.connect(audioCtx.destination);
-  // 音效 B (type=1) 會更大聲、頻率更高
-  o.frequency.value = type === 0 ? 800 : 1100;
-  g.gain.value = type === 0 ? 0.25 : 0.5;
+  o.frequency.value = 850; g.gain.value = 0.3;
   o.start(); g.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
   o.stop(audioCtx.currentTime + 0.12);
 }
@@ -135,42 +140,63 @@ async function toggleStart() {
   timerId = setInterval(() => { elapsedSec++; document.getElementById('bigElapsed').innerText = formatTime(elapsedSec); }, 1000);
   
   const p = config.plan;
-  // 簡單邏輯：跑完所有階段。每公里自動切換音效邏輯
   for (let i = 0; i < p.length; i++) {
     let bInt = 60000/p[i].bpm;
     let rem = p[i].sec;
     while(rem > 0 && isRunning) {
-      let soundType = Math.floor(totalDist/1000) % 2; // 每公里換音效
-      playBeep(soundType);
+      playBeep();
       await new Promise(r => setTimeout(r, bInt));
       rem -= (bInt/1000);
     }
   }
 }
 
-function adjThres(dir) { config.threshold += (dir * config.step); document.getElementById('thresholdDisplay').innerText = config.threshold.toFixed(2); save(); }
-function updateCfg(i, k, v) { config.plan[i][k] = parseInt(v); save(); }
-function save() { localStorage.setItem('run_config_v3.6', JSON.stringify(config)); }
-
 function stopAndSave() {
   isRunning = false; clearInterval(timerId);
   if (wakeLock) wakeLock.release();
   if (watchId) navigator.geolocation.clearWatch(watchId);
-  if (totalDist > 10) {
-    const rec = JSON.parse(localStorage.getItem('run_history_v3.6') || "[]");
-    rec.unshift({ id: Date.now(), date: new Date().toLocaleString(), dist: (totalDist/1000).toFixed(3), time: formatTime(elapsedSec), threshold: config.threshold.toFixed(2) });
-    localStorage.setItem('run_history_v3.6', JSON.stringify(rec));
+  
+  // 只有在有動過的情況下才存檔
+  if (totalDist > 5 || elapsedSec > 10) {
+    const records = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+    records.unshift({ 
+        id: Date.now(), 
+        date: new Date().toLocaleString(), 
+        dist: (totalDist/1000).toFixed(3), 
+        time: formatTime(elapsedSec), 
+        threshold: config.threshold.toFixed(2) 
+    });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
   }
   location.reload();
 }
 
-function showMiniMap() { document.getElementById('miniMapLayer').style.display = 'block'; if (!liveMap) { liveMap = L.map('miniMap').setView([lastPos.lat, lastPos.lon], 16); L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(liveMap); livePoly = L.polyline([], {color: '#ff6a00'}).addTo(liveMap); } }
+function calcTotalTime() {
+    const p = config.plan;
+    const totalSec = p[0].sec + ((p[1].sec + p[2].sec + p[3].sec) * config.loops) + p[4].sec;
+    document.getElementById('totalPlanTime').innerText = (totalSec/60).toFixed(1);
+}
+
+function adjThres(dir) { config.threshold += (dir * config.step); document.getElementById('thresholdDisplay').innerText = config.threshold.toFixed(2); save(); }
+function updateCfg(i, k, v) { config.plan[i][k] = parseInt(v); calcTotalTime(); save(); }
+function updateLoops(v) { config.loops = parseInt(v); calcTotalTime(); save(); }
+function updateStep(v) { config.step = parseFloat(v); save(); }
+function save() { localStorage.setItem(CONFIG_KEY, JSON.stringify(config)); }
+
+function showMiniMap() { document.getElementById('miniMapLayer').style.display = 'block'; if (!liveMap && lastPos) { liveMap = L.map('miniMap').setView([lastPos.lat, lastPos.lon], 16); L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(liveMap); livePoly = L.polyline([], {color: '#ff6a00'}).addTo(liveMap); } }
 function hideMiniMap() { document.getElementById('miniMapLayer').style.display = 'none'; }
 function haversine(lat1, lon1, lat2, lon2) { const R = 6371000; const dLat = (lat2-lat1)*Math.PI/180, dLon = (lon2-lon1)*Math.PI/180; const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2; return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); }
 function formatTime(s) { return Math.floor(s/60).toString().padStart(2,'0')+":"+(s%60).toString().padStart(2,'0'); }
+
 function renderHistory() {
-  const rec = JSON.parse(localStorage.getItem('run_history_v3.6') || "[]");
-  document.getElementById('historyList').innerHTML = rec.map(r => `<div class="card">📅 ${r.date} | <b>🏃 ${r.dist} km</b> (門檻:${r.threshold}m)</div>`).join('');
+  const rec = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+  document.getElementById('historyContainer').innerHTML = rec.map(r => `
+    <div class="history-card">
+        📅 ${r.date} | ⏱️ ${r.time}<br>
+        <b style="font-size:1.1rem; color:var(--primary);">🏃 ${r.dist} km</b> 
+        <span style="font-size:11px; margin-left:10px; color:#888;">(門檻: ${r.threshold}m)</span>
+    </div>
+  `).join('');
 }
 window.onload = init;
 </script>
