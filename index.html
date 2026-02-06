@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>跑步教練 V4.3 - 深度優化版</title>
+<title>跑步教練 V4.3.1</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -34,7 +34,9 @@ input { width: 55px; padding: 6px; text-align: center; border: 1px solid #ccc; b
 #mapModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: white; z-index: 20000; flex-direction: column; }
 #map { flex-grow: 1; width: 100%; }
 
+/* 歷史紀錄排版優化 */
 .history-card { background: white; border-radius: 10px; padding: 10px; margin-bottom: 8px; border-left: 5px solid var(--primary); }
+.dist-line { display: flex; align-items: baseline; gap: 8px; margin: 4px 0; }
 .history-btns { display: flex; gap: 4px; margin-top: 8px; }
 .btn-sm { flex: 1; padding: 8px 2px; font-size: 12px; border-radius: 5px; border: none; color: white; cursor: pointer; }
 </style>
@@ -67,14 +69,13 @@ input { width: 55px; padding: 6px; text-align: center; border: 1px solid #ccc; b
         <span id="liveThresDisp" style="font-size: 1.8rem; font-weight:bold; color:var(--primary);">0.30</span>
         <button class="adj-btn" onclick="adjThres(1)">＋</button>
     </div>
-    <div style="font-size:11px; color:#666; margin-top:8px;">若原地踏步里程卻增加，請按「＋」</div>
   </div>
 
   <button class="btn-start" style="width: 80%; background: var(--danger); margin-top: 30px;" onclick="stopAndSave()">結束並儲存</button>
 </div>
 
 <div class="card">
-  <h2>🏃 跑步教練 V4.3</h2>
+  <h2>🏃 跑步教練 V4.3.1</h2>
   <table>
     <tbody id="configTbody">
       <tr><td><b>熱身</b></td><td>BPM <input type="number" id="bpm0"></td><td>秒 <input type="number" id="sec0"></td></tr>
@@ -99,8 +100,7 @@ input { width: 55px; padding: 6px; text-align: center; border: 1px solid #ccc; b
 </div>
 
 <script>
-// --- 需求一：版本自動合併與舊資料讀取 ---
-const STORAGE_KEY = 'run_history_v4.2'; // 延用 Key 確保紀錄不消失
+const STORAGE_KEY = 'run_history_v4.2'; 
 const DEFAULT_BPM = [180, 205, 215, 195, 180];
 const DEFAULT_SEC = [180, 60, 60, 120, 180];
 
@@ -125,39 +125,28 @@ function init() {
   document.getElementById('loopCount').oninput = updateUI;
   document.getElementById('thresholdStep').value = config.step;
   document.getElementById('thresholdStep').oninput = updateUI;
-  document.getElementById('liveThresDisp').innerText = config.threshold.toFixed(2);
+  document.getElementById('liveThresDisp').innerText = (config.threshold || 0.30).toFixed(2);
   calcTotalTime();
   renderHistory();
 }
 
-// --- 需求二：強化音效邏輯 (提高增益與頻率穩定度) ---
 function playBeep() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   const o = audioCtx.createOscillator(), g = audioCtx.createGain();
   o.connect(g); g.connect(audioCtx.destination);
-  
-  // A音(方波，更響亮有力)，B音(鋸齒波，極高穿透力)
-  if (activeSoundIndex === 0) {
-      o.type = 'square'; o.frequency.value = 900;
-  } else {
-      o.type = 'sawtooth'; o.frequency.value = 500;
-  }
-  
-  g.gain.setValueAtTime(0.5, audioCtx.currentTime); // 調高基礎音量
+  o.type = (activeSoundIndex === 0) ? 'square' : 'sawtooth';
+  o.frequency.value = (activeSoundIndex === 0) ? 900 : 500;
+  g.gain.setValueAtTime(0.5, audioCtx.currentTime);
   g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
-  o.start();
-  o.stop(audioCtx.currentTime + 0.15);
+  o.start(); o.stop(audioCtx.currentTime + 0.15);
 }
 
-// --- 需求三：手動修正備註 (地點與天氣) ---
 function showNote(id) {
     let recs = JSON.parse(localStorage.getItem(STORAGE_KEY));
     let idx = recs.findIndex(r => r.id === id);
     let r = recs[idx];
-    
     let newLoc = prompt("修正起點位置:", r.note?.location || "");
     let newWeather = prompt("修正天氣資訊:", r.note?.weather || "");
-    
     if (newLoc !== null || newWeather !== null) {
         recs[idx].note = { location: newLoc, weather: newWeather };
         localStorage.setItem(STORAGE_KEY, JSON.stringify(recs));
@@ -165,7 +154,6 @@ function showNote(id) {
     }
 }
 
-// --- 核心邏輯 ---
 async function toggleStart() {
   if (!audioCtx) audioCtx = new AudioContext();
   if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen');
@@ -191,8 +179,7 @@ async function toggleStart() {
           if(totalDist > 10) document.getElementById('bigPace').innerText = formatTime(Math.floor(elapsedSec/(totalDist/1000)));
         }
       }
-      lastPos = { lat, lon };
-      trackPoints.push({ lat, lon });
+      lastPos = { lat, lon }; trackPoints.push({ lat, lon });
     }
   }, null, { enableHighAccuracy: true });
 
@@ -213,13 +200,9 @@ async function runPhase(bpm, sec, label) {
     document.getElementById('statusTop').innerText = "● " + label;
     let bInt = 60000/bpm;
     let end = Date.now() + (sec * 1000);
-    while(Date.now() < end && isRunning) {
-        playBeep();
-        await new Promise(r => setTimeout(r, bInt));
-    }
+    while(Date.now() < end && isRunning) { playBeep(); await new Promise(r => setTimeout(r, bInt)); }
 }
 
-// --- 通用與存檔 ---
 function updateUI() {
     for(let i=0; i<5; i++) {
         config.bpm[i] = parseInt(document.getElementById('bpm'+i).value) || 0;
@@ -243,7 +226,15 @@ function stopAndSave() {
   if (watchId) navigator.geolocation.clearWatch(watchId);
   if (totalDist > 10) {
     const records = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-    records.unshift({ id: Date.now(), date: new Date().toLocaleString(), dist: (totalDist/1000).toFixed(3), time: formatTime(elapsedSec), points: trackPoints, note: startNote, threshold: config.threshold.toFixed(2) });
+    records.unshift({ 
+        id: Date.now(), 
+        date: new Date().toLocaleString(), 
+        dist: (totalDist/1000).toFixed(3), 
+        time: formatTime(elapsedSec), 
+        points: trackPoints, 
+        note: startNote, 
+        threshold: config.threshold.toFixed(2) // 儲存當次的門檻
+    });
     localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
   }
   location.reload();
@@ -254,7 +245,10 @@ function renderHistory() {
   document.getElementById('historyContainer').innerHTML = rec.length ? rec.map(r => `
     <div class="history-card">
         <div style="font-size:12px; color:#666;">📅 ${r.date} | ⏱️ ${r.time}</div>
-        <b style="font-size:1.2rem; color:var(--primary);">🏃 ${r.dist} km</b> <small>(${r.threshold}m)</small>
+        <div class="dist-line">
+            <b style="font-size:1.3rem; color:var(--primary);">🏃 ${r.dist} km</b>
+            <span style="font-size:0.85rem; color:#999; background:#f0f0f0; padding:2px 6px; border-radius:4px;">門檻: ${r.threshold || '--'}m</span>
+        </div>
         <div class="history-btns">
             <button class="btn-sm" style="background:var(--info);" onclick="viewTrack(${r.id})">軌跡</button>
             <button class="btn-sm" style="background:var(--note);" onclick="showNote(${r.id})">備註(改)</button>
