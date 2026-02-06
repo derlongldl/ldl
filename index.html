@@ -2,45 +2,57 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>跑步教練 V4.1 - 最終修正版</title>
+<title>跑步教練 V4.2 - 全功能回歸版</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
-:root { --primary: #ff6a00; --bg: #f0f2f5; --card: #ffffff; --danger: #e74c3c; --success: #2ecc71; --info: #3498db; }
+:root { --primary: #ff6a00; --bg: #f0f2f5; --card: #ffffff; --danger: #e74c3c; --success: #2ecc71; --info: #3498db; --note: #9b59b6; }
 body { font-family: system-ui, sans-serif; background: var(--bg); margin: 0; padding: 5px; }
 .card { background: var(--card); border-radius: 12px; padding: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 10px; }
 h2 { text-align:center; color:var(--primary); margin:5px 0; }
-
-/* 儀表板模式 */
-#trainingOverlay {
-  display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-  background: #000; color: #fff; z-index: 10000; flex-direction: column;
-  justify-content: center; align-items: center; text-align: center;
-}
-.big-val { font-size: 5.5rem; font-weight: 900; color: var(--primary); font-family: monospace; line-height: 1.1; }
-.small-grid { display: flex; width: 100%; justify-content: space-around; margin-top: 20px; }
-.small-val { font-size: 2.8rem; color: #fff; font-family: monospace; font-weight: bold; }
-.label { font-size: 0.9rem; color: #888; }
-
-/* 設定介面樣式 */
 table { width: 100%; border-collapse: collapse; }
 td { padding: 8px 2px; border-bottom: 1px solid #eee; text-align: center; }
 input { width: 55px; padding: 6px; text-align: center; border: 1px solid #ccc; border-radius: 5px; font-size: 1rem; }
 .btn-start { width: 100%; padding: 18px; background: var(--primary); border: none; border-radius: 12px; color: white; font-size: 1.4rem; font-weight: bold; margin-top: 15px; }
 
-/* 歷史紀錄 */
-.history-card { 
-  background: white; border-radius: 10px; padding: 12px; margin-bottom: 8px; 
-  border-left: 5px solid var(--primary); display: flex; justify-content: space-between; align-items: center;
+/* 儀表板 */
+#trainingOverlay {
+  display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: #000; color: #fff; z-index: 10000; flex-direction: column;
+  justify-content: center; align-items: center; text-align: center;
 }
-.btn-del { background: var(--danger); color: white; border: none; padding: 8px 12px; border-radius: 6px; font-size: 13px; }
+.big-val { font-size: 5rem; font-weight: 900; color: var(--primary); font-family: monospace; }
+.small-grid { display: flex; width: 100%; justify-content: space-around; margin-top: 20px; }
+.small-val { font-size: 2.5rem; color: #fff; font-family: monospace; }
+.label { font-size: 0.9rem; color: #888; }
+
+/* 地圖 Modal */
+#mapModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: white; z-index: 20000; flex-direction: column; }
+#map { flex-grow: 1; width: 100%; }
+
+/* 歷史紀錄按鈕 */
+.history-card { background: white; border-radius: 10px; padding: 10px; margin-bottom: 8px; border-left: 5px solid var(--primary); }
+.history-btns { display: flex; gap: 4px; margin-top: 8px; }
+.btn-sm { flex: 1; padding: 8px 2px; font-size: 12px; border-radius: 5px; border: none; color: white; cursor: pointer; }
 </style>
 </head>
 <body>
 
+<div id="mapModal">
+  <div style="padding:10px; background:var(--primary); color:white; text-align:center; font-weight:bold;">運動軌跡地圖</div>
+  <div id="map"></div>
+  <div style="padding:10px; display:flex; justify-content:space-between; align-items:center;">
+    <span id="mapInfo" style="font-size:12px;">載入中...</span>
+    <button onclick="closeMap()" style="padding:8px 20px;">返回</button>
+  </div>
+</div>
+
 <div id="trainingOverlay">
-  <div style="position: absolute; top: 15px; color: var(--success);">● 訓練進行中</div>
+  <div id="statusTop" style="position: absolute; top: 15px; color: var(--success);">● 訓練進行中</div>
   <div class="label">累積公里 KM</div>
   <div id="bigDistance" class="big-val">0.000</div>
+  <div id="soundMode" style="color: var(--info); font-size: 14px; margin-top: -10px;">🎵 音效 A (預設)</div>
   <div class="small-grid">
     <div><div class="label">配速</div><div id="bigPace" class="small-val">--:--</div></div>
     <div><div class="label">時間</div><div id="bigElapsed" class="small-val">00:00</div></div>
@@ -48,10 +60,10 @@ input { width: 55px; padding: 6px; text-align: center; border: 1px solid #ccc; b
   <button class="btn-start" style="width: 80%; background: var(--danger); margin-top: 40px;" onclick="stopAndSave()">結束並儲存</button>
 </div>
 
-<div class="card" id="mainConfigUI">
-  <h2>🏃 跑步教練 V4.1</h2>
+<div class="card">
+  <h2>🏃 跑步教練 V4.2</h2>
   <table>
-    <tbody id="planBody">
+    <tbody>
       <tr><td><b>熱身</b></td><td>BPM <input type="number" id="bpm0" onchange="updateUI()"></td><td>秒 <input type="number" id="sec0" onchange="updateUI()"></td></tr>
       <tr><td><b>間歇</b></td><td>BPM <input type="number" id="bpm1" onchange="updateUI()"></td><td>秒 <input type="number" id="sec1" onchange="updateUI()"></td></tr>
       <tr><td><b>衝刺</b></td><td>BPM <input type="number" id="bpm2" onchange="updateUI()"></td><td>秒 <input type="number" id="sec2" onchange="updateUI()"></td></tr>
@@ -62,15 +74,15 @@ input { width: 55px; padding: 6px; text-align: center; border: 1px solid #ccc; b
   
   <div style="display:flex; justify-content:space-between; align-items:center; margin-top:15px; padding:10px; background:#f9f9f9; border-radius:8px; font-size:14px;">
     <span>循環：<input id="loopCount" type="number" onchange="updateUI()"></span>
-    <span>步進：<input id="thresholdStep" type="number" step="0.01" style="width:45px;" onchange="updateUI()"></span>
+    <span>步進：<input id="thresholdStep" type="number" step="0.01" style="width:40px;" onchange="updateUI()"></span>
     <span>預計 <b id="totalPlanTime" style="color:var(--primary)">0</b> 分</span>
   </div>
 
   <div style="display:flex; justify-content:space-between; align-items:center; margin-top:15px;">
     <span style="font-weight:bold;">GPS門檻：<span id="thresholdDisplay" style="color:var(--primary)">0.30</span>m</span>
     <div style="display:flex; gap:10px;">
-        <button style="padding:10px 20px; border-radius:8px;" onclick="adjThres(-1)">－</button>
-        <button style="padding:10px 20px; border-radius:8px;" onclick="adjThres(1)">＋</button>
+        <button style="padding:10px 20px;" onclick="adjThres(-1)">－</button>
+        <button style="padding:10px 20px;" onclick="adjThres(1)">＋</button>
     </div>
   </div>
   
@@ -83,28 +95,21 @@ input { width: 55px; padding: 6px; text-align: center; border: 1px solid #ccc; b
 </div>
 
 <script>
-// 救援邏輯：從舊版本抓回紀錄
-function getMergedHistory() {
-    const v29 = JSON.parse(localStorage.getItem('run_history_v2.9') || "[]");
-    const v30 = JSON.parse(localStorage.getItem('run_history_v3.0') || "[]");
-    const v40 = JSON.parse(localStorage.getItem('run_coach_data_v4_history') || "[]");
-    let merged = [...v40, ...v30, ...v29];
-    // 去除重複的 ID
-    return merged.filter((item, index, self) => index === self.findIndex((t) => t.id === item.id));
-}
-
-let config = JSON.parse(localStorage.getItem('run_config_v4.1')) || { 
-  bpm: [180, 205, 215, 195, 180],
-  sec: [180, 60, 60, 120, 180],
-  loops: 5, threshold: 0.32, step: 0.01
+// --- 初始化與變數 ---
+let config = JSON.parse(localStorage.getItem('run_config_v4.2')) || { 
+  bpm: [180, 205, 215, 195, 180], sec: [180, 60, 60, 120, 180],
+  loops: 5, threshold: 0.32, step: 0.01 
 };
-
-let isRunning = false, totalDist = 0, elapsedSec = 0, watchId = null, timerId = null, lastPos = null, audioCtx = null, wakeLock = null;
+let isRunning = false, totalDist = 0, elapsedSec = 0, lastVibratedKm = 0;
+let watchId = null, timerId = null, lastPos = null, audioCtx = null, wakeLock = null;
+let trackPoints = [], activeSoundIndex = 0;
+let startNote = { location: "定位中...", weather: "抓取中..." };
+let map = null, polyline = null;
 
 function init() {
   for(let i=0; i<5; i++) {
-      document.getElementById('bpm'+i).value = config.bpm[i];
-      document.getElementById('sec'+i).value = config.sec[i];
+    document.getElementById('bpm'+i).value = config.bpm[i];
+    document.getElementById('sec'+i).value = config.sec[i];
   }
   document.getElementById('loopCount').value = config.loops;
   document.getElementById('thresholdStep').value = config.step;
@@ -113,122 +118,132 @@ function init() {
   renderHistory();
 }
 
-function updateUI() {
-    for(let i=0; i<5; i++) {
-        config.bpm[i] = parseInt(document.getElementById('bpm'+i).value) || 0;
-        config.sec[i] = parseInt(document.getElementById('sec'+i).value) || 0;
-    }
-    config.loops = parseInt(document.getElementById('loopCount').value) || 1;
-    config.step = parseFloat(document.getElementById('thresholdStep').value) || 0.01;
-    localStorage.setItem('run_config_v4.1', JSON.stringify(config));
-    calcTotalTime();
+// --- 核心功能 (地點與天氣) ---
+async function fetchStartInfo(lat, lon) {
+  try {
+    fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18`, { headers: { 'Accept-Language': 'zh-TW' } })
+      .then(res => res.json()).then(data => { startNote.location = data.display_name.split(',')[0] || "未知地點"; });
+    fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`)
+      .then(res => res.json()).then(data => {
+        const w = data.current_weather;
+        startNote.weather = `氣溫 ${w.temperature}°C`;
+      });
+  } catch (e) { startNote.location = "連線失敗"; }
 }
 
-function calcTotalTime() {
-    const total = config.sec[0] + ((config.sec[1] + config.sec[2] + config.sec[3]) * config.loops) + config.sec[4];
-    document.getElementById('totalPlanTime').innerText = (total/60).toFixed(1);
-}
-
-function adjThres(dir) { 
-    config.threshold += (dir * config.step); 
-    document.getElementById('thresholdDisplay').innerText = config.threshold.toFixed(2); 
-    localStorage.setItem('run_config_v4.1', JSON.stringify(config));
-}
-
-async function requestWakeLock() { if ('wakeLock' in navigator) { try { wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {} } }
-
+// --- 音效系統 (修正一：每公里自動切換，修正二：達標後持續響) ---
 function playBeep() {
   if (!audioCtx) audioCtx = new AudioContext();
   const o = audioCtx.createOscillator(), g = audioCtx.createGain();
   o.connect(g); g.connect(audioCtx.destination);
-  o.frequency.value = 850; g.gain.value = 0.3;
+  // 每公里切換音頻
+  if (activeSoundIndex === 0) { o.frequency.value = 850; o.type = 'sine'; } 
+  else { o.frequency.value = 450; o.type = 'triangle'; }
+  g.gain.value = 0.3;
   o.start(); g.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
   o.stop(audioCtx.currentTime + 0.12);
 }
 
-function startGPS() {
+// --- 訓練邏輯 ---
+async function toggleStart() {
+  if (!audioCtx) audioCtx = new AudioContext();
+  if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen');
+  document.getElementById('trainingOverlay').style.display = 'flex';
+  isRunning = true; totalDist = 0; elapsedSec = 0; trackPoints = []; lastPos = null; activeSoundIndex = 0;
+  
+  // GPS
   watchId = navigator.geolocation.watchPosition(pos => {
     const { latitude: lat, longitude: lon, accuracy } = pos.coords;
     if (accuracy < 60) {
+      if (!lastPos) fetchStartInfo(lat, lon);
       if (lastPos) {
         const d = haversine(lastPos.lat, lastPos.lon, lat, lon);
         if (d > config.threshold && d < 50) {
           totalDist += d;
           document.getElementById('bigDistance').innerText = (totalDist/1000).toFixed(3);
+          // 每公里振動並切換音效
+          const curKm = Math.floor(totalDist / 1000);
+          if (curKm > lastVibratedKm) {
+            if (navigator.vibrate) navigator.vibrate([500, 200, 500]);
+            lastVibratedKm = curKm;
+            activeSoundIndex = 1 - activeSoundIndex;
+            document.getElementById('soundMode').innerText = activeSoundIndex === 0 ? "🎵 音效 A (高音)" : "🎵 音效 B (低音)";
+          }
           if(totalDist > 10) document.getElementById('bigPace').innerText = formatTime(Math.floor(elapsedSec/(totalDist/1000)));
         }
       }
       lastPos = { lat, lon };
+      trackPoints.push({ lat, lon });
     }
   }, null, { enableHighAccuracy: true });
-}
 
-async function toggleStart() {
-  if (!audioCtx) audioCtx = new AudioContext();
-  await requestWakeLock();
-  document.getElementById('trainingOverlay').style.display = 'flex';
-  isRunning = true; totalDist = 0; elapsedSec = 0;
-  startGPS();
   timerId = setInterval(() => { elapsedSec++; document.getElementById('bigElapsed').innerText = formatTime(elapsedSec); }, 1000);
   
-  // 訓練循環邏輯
-  await runPhase(config.bpm[0], config.sec[0]); // 熱身
+  // 執行階段
+  await runPhase(config.bpm[0], config.sec[0], "熱身");
   for(let j=0; j<config.loops; j++) {
-      await runPhase(config.bpm[1], config.sec[1]);
-      await runPhase(config.bpm[2], config.sec[2]);
-      await runPhase(config.bpm[3], config.sec[3]);
+      await runPhase(config.bpm[1], config.sec[1], `${j+1}組:間歇`);
+      await runPhase(config.bpm[2], config.sec[2], `${j+1}組:衝刺`);
+      await runPhase(config.bpm[3], config.sec[3], `${j+1}組:恢復`);
   }
-  await runPhase(config.bpm[4], config.sec[4]); // 舒緩
-}
-
-async function runPhase(bpm, sec) {
-    if(!isRunning) return;
-    let bInt = 60000/bpm;
-    let rem = sec;
-    while(rem > 0 && isRunning) {
+  await runPhase(config.bpm[4], config.sec[4], "舒緩");
+  
+  // 修正二：訓練完畢後持續節奏音直到手動按停止
+  if (isRunning) {
+    document.getElementById('statusTop').innerText = "✨ 達標 (持續紀錄中)";
+    const bInt = 60000 / config.bpm[4];
+    while(isRunning) {
         playBeep();
         await new Promise(r => setTimeout(r, bInt));
-        rem -= (bInt/1000);
+    }
+  }
+}
+
+async function runPhase(bpm, sec, label) {
+    if(!isRunning || sec <= 0) return;
+    document.getElementById('statusTop').innerText = "● " + label;
+    let bInt = 60000/bpm;
+    let endTime = Date.now() + (sec * 1000);
+    while(Date.now() < endTime && isRunning) {
+        playBeep();
+        await new Promise(r => setTimeout(r, bInt));
     }
 }
 
+// --- 儲存與歷史 (修正三：地點天氣回歸，修正四：軌跡修正刪除按鈕) ---
 function stopAndSave() {
   isRunning = false; clearInterval(timerId);
   if (wakeLock) wakeLock.release();
   if (watchId) navigator.geolocation.clearWatch(watchId);
   if (totalDist > 5) {
-    const records = getMergedHistory();
-    records.unshift({ id: Date.now(), date: new Date().toLocaleString(), dist: (totalDist/1000).toFixed(3), time: formatTime(elapsedSec), threshold: config.threshold.toFixed(2) });
-    localStorage.setItem('run_coach_data_v4_history', JSON.stringify(records));
+    const records = JSON.parse(localStorage.getItem('run_history_v4.2') || "[]");
+    records.unshift({ 
+      id: Date.now(), date: new Date().toLocaleString(), 
+      dist: (totalDist/1000).toFixed(3), time: formatTime(elapsedSec), 
+      points: trackPoints, note: startNote, threshold: config.threshold.toFixed(2)
+    });
+    localStorage.setItem('run_history_v4.2', JSON.stringify(records));
   }
   location.reload();
 }
 
-function deleteRec(id) {
-    if (confirm("確定刪除？")) {
-        let recs = getMergedHistory();
-        recs = recs.filter(r => r.id !== id);
-        localStorage.setItem('run_coach_data_v4_history', JSON.stringify(recs));
-        localStorage.setItem('run_history_v3.0', JSON.stringify([])); // 清空舊版避免重複讀取
-        localStorage.setItem('run_history_v2.9', JSON.stringify([]));
-        renderHistory();
-    }
-}
-
-function haversine(lat1, lon1, lat2, lon2) { const R = 6371000; const dLat = (lat2-lat1)*Math.PI/180, dLon = (lon2-lon1)*Math.PI/180; const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2; return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); }
-function formatTime(s) { return Math.floor(s/60).toString().padStart(2,'0')+":"+(s%60).toString().padStart(2,'0'); }
-
 function renderHistory() {
-  const rec = getMergedHistory();
+  const rec = JSON.parse(localStorage.getItem('run_history_v4.2') || "[]");
   document.getElementById('historyContainer').innerHTML = rec.length ? rec.map(r => `
     <div class="history-card">
-        <div>📅 ${r.date}<br><b>🏃 ${r.dist} km</b> | ⏱️ ${r.time} <small>(${r.threshold}m)</small></div>
-        <button class="btn-del" onclick="deleteRec(${r.id})">刪除</button>
+        <div style="font-size:12px; color:#666;">📅 ${r.date} | ⏱️ ${r.time}</div>
+        <b style="font-size:1.2rem; color:var(--primary);">🏃 ${r.dist} km</b> <small>(${r.threshold}m)</small>
+        <div class="history-btns">
+            <button class="btn-sm" style="background:var(--info);" onclick="viewTrack(${r.id})">軌跡</button>
+            <button class="btn-sm" style="background:var(--note);" onclick="showNote(${r.id})">備註</button>
+            <button class="btn-sm" style="background:var(--success);" onclick="editDist(${r.id})">修正</button>
+            <button class="btn-sm" style="background:var(--danger);" onclick="deleteRec(${r.id})">刪除</button>
+        </div>
     </div>
   `).join('') : '<div style="text-align:center;color:#aaa;">尚無紀錄</div>';
 }
 
-init();
-</script>
-</body>
-</html>
+// --- 輔助功能 ---
+function showNote(id) {
+    const r = JSON.parse(localStorage.getItem('run_history_v4.2')).find(r => r.id === id);
+    alert(`📍 起點：${r.note?.location || '未知'}\n🌤
