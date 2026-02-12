@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>跑步教練 V4.5.1</title>
+<title>跑步教練 V4.5.2</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -13,20 +13,20 @@ body { font-family: system-ui, sans-serif; background: var(--bg); margin: 0; pad
 h2 { text-align:center; color:var(--primary); margin:5px 0; }
 table { width: 100%; border-collapse: collapse; }
 td { padding: 8px 2px; border-bottom: 1px solid #eee; text-align: center; }
-input { width: 55px; padding: 6px; text-align: center; border: 1px solid #ccc; border-radius: 5px; font-size: 1rem; }
+input { width: 60px; padding: 8px; text-align: center; border: 1px solid #ccc; border-radius: 5px; font-size: 1rem; }
 .btn-start-group { display: flex; gap: 10px; margin-top: 15px; }
 .btn-start { flex: 1; padding: 15px 5px; border: none; border-radius: 12px; color: white; font-size: 1rem; font-weight: bold; cursor: pointer; }
 .btn-auto { background: var(--primary); }
 .btn-manual { background: var(--info); }
 
-/* 儀表板優化 */
+/* 訓練儀表板 */
 #trainingOverlay {
   display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
   background: #000; color: #fff; z-index: 10000; flex-direction: column;
   justify-content: center; align-items: center; text-align: center;
 }
-#statusTop { font-size: 2.5rem; font-weight: bold; color: var(--success); margin-bottom: 5px; }
-#phaseDetail { font-size: 1.4rem; color: #ccc; margin-bottom: 20px; }
+#statusTop { font-size: 3rem; font-weight: bold; color: var(--success); margin-bottom: 5px; } /* 加大標題 */
+#phaseDetail { font-size: 1.6rem; color: #ffeb3b; margin-bottom: 20px; font-weight: bold; } /* 強化節拍秒數顯示 */
 
 .big-val { font-size: 5rem; font-weight: 900; color: var(--primary); font-family: monospace; }
 .small-grid { display: flex; width: 100%; justify-content: space-around; margin-top: 10px; }
@@ -42,26 +42,22 @@ input { width: 55px; padding: 6px; text-align: center; border: 1px solid #ccc; b
 .dist-line { display: flex; align-items: center; justify-content: space-between; margin: 4px 0; }
 .history-btns { display: flex; gap: 4px; margin-top: 8px; }
 .btn-sm { flex: 1; padding: 8px 2px; font-size: 12px; border-radius: 5px; border: none; color: white; cursor: pointer; }
-.btn-gpx { background: #555; color: white; font-size: 10px; padding: 2px 6px; border-radius: 4px; border: none; }
 </style>
 </head>
 <body>
 
 <div id="mapModal">
-  <div style="padding:10px; background:var(--primary); color:white; text-align:center; font-weight:bold;">運動軌跡地圖</div>
+  <div style="padding:10px; background:var(--primary); color:white; text-align:center; font-weight:bold;">運動軌跡</div>
   <div id="map"></div>
-  <div style="padding:10px; display:flex; justify-content:space-between; align-items:center;">
-    <span id="mapInfo" style="font-size:12px;">載入中...</span>
-    <button onclick="closeMap()" style="padding:8px 20px;">返回</button>
-  </div>
+  <button onclick="closeMap()" style="padding:15px; width:100%; background:#444; color:white; border:none;">關閉地圖</button>
 </div>
 
 <div id="trainingOverlay">
   <div id="statusTop">● 準備中</div>
-  <div id="phaseDetail">BPM --- | 剩餘 --- 秒</div>
+  <div id="phaseDetail">節拍 -- | 剩餘 -- 秒</div>
   <div class="label">累積公里 KM</div>
   <div id="bigDistance" class="big-val">0.000</div>
-  <div id="soundMode" style="color: var(--info); font-size: 14px; margin-top: -10px;">🎵 音效 A (強化音)</div>
+  <div id="soundMode" style="color: var(--info); font-size: 14px; margin-top: -10px;">🎵 音效 A</div>
   <div class="small-grid">
     <div><div class="label">配速</div><div id="bigPace" class="small-val">--:--</div></div>
     <div><div class="label">時間</div><div id="bigElapsed" class="small-val">00:00</div></div>
@@ -78,9 +74,9 @@ input { width: 55px; padding: 6px; text-align: center; border: 1px solid #ccc; b
 </div>
 
 <div class="card">
-  <h2>🏃 跑步教練 V4.5.1</h2>
+  <h2>🏃 跑步教練 V4.5.2</h2>
   <table>
-    <tbody>
+    <tbody id="configTable">
       <tr><td><b>熱身</b></td><td>BPM <input type="number" id="bpm0"></td><td>秒 <input type="number" id="sec0"></td></tr>
       <tr><td><b>間歇</b></td><td>BPM <input type="number" id="bpm1"></td><td>秒 <input type="number" id="sec1"></td></tr>
       <tr><td><b>衝刺</b></td><td>BPM <input type="number" id="bpm2"></td><td>秒 <input type="number" id="sec2"></td></tr>
@@ -115,40 +111,44 @@ input { width: 55px; padding: 6px; text-align: center; border: 1px solid #ccc; b
 </div>
 
 <script>
-const HISTORY_KEY = 'run_history_v4.2'; 
-const CONFIG_KEY = 'run_config_v4.2';
+// 使用全新金鑰，徹底隔離舊資料
+const HISTORY_KEY = 'run_history_v45'; 
+const CONFIG_KEY = 'run_config_v45';
 const DEFAULT_BPM = [180, 205, 215, 195, 180];
 const DEFAULT_SEC = [180, 60, 60, 120, 180];
 
-let config = JSON.parse(localStorage.getItem(CONFIG_KEY)) || {};
+let config = {};
 
 function init() {
-  // 核心修復：確保 config 內的物件屬性完整
-  if(!config.bpm) config.bpm = [...DEFAULT_BPM];
-  if(!config.sec) config.sec = [...DEFAULT_SEC];
+  // 強制初始化預設值邏輯
+  let saved = localStorage.getItem(CONFIG_KEY);
+  if (saved) {
+    try {
+      config = JSON.parse(saved);
+    } catch(e) { config = {}; }
+  }
+
+  // 如果物件不完整，強制修補
+  if(!config.bpm || config.bpm.length < 5) config.bpm = [...DEFAULT_BPM];
+  if(!config.sec || config.sec.length < 5) config.sec = [...DEFAULT_SEC];
   if(!config.loops) config.loops = 5;
   if(!config.threshold) config.threshold = 0.32;
   if(!config.step) config.step = 0.01;
 
+  // 填入 UI
   for(let i=0; i<5; i++) {
-    const b = document.getElementById('bpm'+i);
-    const s = document.getElementById('sec'+i);
-    b.value = config.bpm[i] || DEFAULT_BPM[i];
-    s.value = config.sec[i] || DEFAULT_SEC[i];
-    b.oninput = updateUI;
-    s.oninput = updateUI;
+    document.getElementById('bpm'+i).value = config.bpm[i];
+    document.getElementById('sec'+i).value = config.sec[i];
+    document.getElementById('bpm'+i).oninput = updateUI;
+    document.getElementById('sec'+i).oninput = updateUI;
   }
   document.getElementById('loopCount').value = config.loops;
   document.getElementById('loopCount').oninput = updateUI;
   document.getElementById('thresholdStep').value = config.step;
   document.getElementById('thresholdStep').oninput = updateUI;
   
-  syncThresUI(); 
-  calcTotalTime(); 
-  renderHistory();
+  syncThresUI(); calcTotalTime(); renderHistory();
 }
-
-function syncThresUI() { document.querySelectorAll('.liveThresDisp').forEach(el => el.innerText = config.threshold.toFixed(2)); }
 
 function updateUI() {
     config.bpm = []; config.sec = [];
@@ -162,53 +162,27 @@ function updateUI() {
     calcTotalTime();
 }
 
-// 其餘功能保持不變 (音效、GPS、儲存邏輯、GPX 匯出)
-let isRunning = false, autoSave = true, totalDist = 0, elapsedSec = 0, lastVibratedKm = 0;
-let watchId = null, timerId = null, lastPos = null, audioCtx = null, wakeLock = null;
-let trackPoints = [], activeSoundIndex = 0;
-let startNote = { location: "定位中...", weather: "抓取中..." };
-let map = null, polyline = null;
-
-function playBeep() {
-  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-  o.connect(g); g.connect(audioCtx.destination);
-  o.type = (activeSoundIndex === 0) ? 'square' : 'sawtooth';
-  o.frequency.value = (activeSoundIndex === 0) ? 900 : 500;
-  g.gain.setValueAtTime(0.5, audioCtx.currentTime);
-  g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
-  o.start(); o.stop(audioCtx.currentTime + 0.15);
-}
-
-function adjThres(dir) { 
-    config.threshold += (dir * config.step); 
-    if(config.threshold < 0.05) config.threshold = 0.05;
-    syncThresUI(); updateUI(); 
-}
+// 運行與邏輯
+let isRunning = false, autoSave = true, totalDist = 0, elapsedSec = 0;
+let watchId = null, timerId = null, audioCtx = null, wakeLock = null;
+let trackPoints = [], lastPos = null, activeSoundIndex = 0;
 
 async function toggleStart(isAuto) {
   autoSave = isAuto;
   if (!audioCtx) audioCtx = new AudioContext();
   if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen');
+  
   document.getElementById('trainingOverlay').style.display = 'flex';
-  isRunning = true; totalDist = 0; elapsedSec = 0; trackPoints = []; lastPos = null; activeSoundIndex = 0; lastVibratedKm = 0;
+  isRunning = true; totalDist = 0; elapsedSec = 0; trackPoints = []; 
   
   watchId = navigator.geolocation.watchPosition(pos => {
     const { latitude: lat, longitude: lon, accuracy } = pos.coords;
     if (accuracy < 60) {
-      if (!lastPos) fetchStartInfo(lat, lon);
       if (lastPos) {
         const d = haversine(lastPos.lat, lastPos.lon, lat, lon);
         if (d > config.threshold && d < 50) {
           totalDist += d;
           document.getElementById('bigDistance').innerText = (totalDist/1000).toFixed(3);
-          const curKm = Math.floor(totalDist / 1000);
-          if (curKm > lastVibratedKm) {
-            if (navigator.vibrate) navigator.vibrate([500, 200, 500]);
-            lastVibratedKm = curKm;
-            activeSoundIndex = 1 - activeSoundIndex;
-            document.getElementById('soundMode').innerText = activeSoundIndex === 0 ? "🎵 音效 A (強化音)" : "🎵 音效 B (穿透音)";
-          }
           if(totalDist > 10) document.getElementById('bigPace').innerText = formatTime(Math.floor(elapsedSec/(totalDist/1000)));
         }
       }
@@ -218,6 +192,7 @@ async function toggleStart(isAuto) {
 
   timerId = setInterval(() => { elapsedSec++; document.getElementById('bigElapsed').innerText = formatTime(elapsedSec); }, 1000);
   
+  // 階段執行
   await runPhase(config.bpm[0], config.sec[0], "熱身");
   for(let j=0; j<config.loops; j++) {
       await runPhase(config.bpm[1], config.sec[1], `間歇 ${j+1}`);
@@ -226,11 +201,12 @@ async function toggleStart(isAuto) {
   }
   await runPhase(config.bpm[4], config.sec[4], "舒緩");
 
-  if(autoSave) { stopAndSave(); } else {
+  if(autoSave) { stopAndSave(); } 
+  else {
       document.getElementById('statusTop').innerText = "● 續跑中";
       document.getElementById('statusTop').style.color = "#3498db";
       while(isRunning) { 
-          document.getElementById('phaseDetail').innerText = `BPM ${config.bpm[4]} | 手動停止前持續`;
+          document.getElementById('phaseDetail').innerText = `節拍 ${config.bpm[4]} | 續跑模式`;
           playBeep(); await new Promise(r => setTimeout(r, 60000/config.bpm[4])); 
       }
   }
@@ -243,7 +219,7 @@ async function runPhase(bpm, sec, label) {
     let end = Date.now() + (sec * 1000);
     while(Date.now() < end && isRunning) {
         let remaining = Math.round((end - Date.now()) / 1000);
-        document.getElementById('phaseDetail').innerText = `BPM ${bpm} | 剩餘 ${remaining} 秒`;
+        document.getElementById('phaseDetail').innerText = `節拍 ${bpm} | 剩餘 ${remaining} 秒`;
         playBeep(); await new Promise(r => setTimeout(r, bInt)); 
     }
 }
@@ -252,28 +228,46 @@ function stopAndSave() {
   if(!isRunning) return;
   isRunning = false; clearInterval(timerId);
   if (watchId) navigator.geolocation.clearWatch(watchId);
-  if (totalDist > 10) {
+  if (totalDist > 1) {
     const records = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
-    records.unshift({ id: Date.now(), date: new Date().toLocaleString(), dist: (totalDist/1000).toFixed(3), time: formatTime(elapsedSec), points: trackPoints, note: startNote, threshold: config.threshold.toFixed(2) });
+    records.unshift({ id: Date.now(), date: new Date().toLocaleString(), dist: (totalDist/1000).toFixed(3), time: formatTime(elapsedSec), points: trackPoints, threshold: config.threshold.toFixed(2) });
     localStorage.setItem(HISTORY_KEY, JSON.stringify(records));
   }
   location.reload();
 }
 
-function exportGPX(id) {
-    const recs = JSON.parse(localStorage.getItem(HISTORY_KEY)) || [];
-    const r = recs.find(r => r.id === id);
-    if (!r || !r.points || r.points.length === 0) return alert("無位置紀錄");
-    let gpx = `<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="RunningCoach" xmlns="http://www.topografix.com/GPX/1/1"><metadata><time>${new Date(r.id).toISOString()}</time></metadata><trk><name>Run ${r.date}</name><trkseg>`;
-    r.points.forEach(p => { gpx += `\n<trkpt lat="${p.lat}" lon="${p.lon}"></trkpt>`; });
-    gpx += `\n</trkseg></trk></gpx>`;
-    const blob = new Blob([gpx], { type: 'application/gpx+xml' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `Run_${r.date.replace(/[/:\s]/g, '-')}.gpx`;
-    document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+function playBeep() {
+  if (!audioCtx) audioCtx = new AudioContext();
+  const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+  o.connect(g); g.connect(audioCtx.destination);
+  o.type = (activeSoundIndex === 0) ? 'square' : 'sawtooth';
+  o.frequency.value = (activeSoundIndex === 0) ? 900 : 500;
+  g.gain.setValueAtTime(0.3, audioCtx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
+  o.start(); o.stop(audioCtx.currentTime + 0.1);
 }
+
+function adjThres(dir) { config.threshold += (dir * config.step); syncThresUI(); updateUI(); }
+function syncThresUI() { document.querySelectorAll('.liveThresDisp').forEach(el => el.innerText = config.threshold.toFixed(2)); }
+function calcTotalTime() { const t = config.sec[0] + ((config.sec[1] + config.sec[2] + config.sec[3]) * config.loops) + config.sec[4]; document.getElementById('totalPlanTime').innerText = (t/60).toFixed(1); }
+function formatTime(s) { return Math.floor(s/60).toString().padStart(2,'0')+":"+(s%60).toString().padStart(2,'0'); }
+function haversine(lat1, lon1, lat2, lon2) { const R = 6371000; const dLat = (lat2-lat1)*Math.PI/180, dLon = (lon2-lon1)*Math.PI/180; const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2; return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); }
 
 function renderHistory() {
   const rec = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
   document.getElementById('historyContainer').innerHTML = rec.length ? rec.map(r => `
-    <div class="
+    <div class="history-card">
+        <div style="font-size:12px; color:#666;">📅 ${r.date} | ⏱️ ${r.time}</div>
+        <div class="dist-line"><b style="font-size:1.3rem; color:var(--primary);">🏃 ${r.dist} km</b></div>
+        <div class="history-btns">
+            <button class="btn-sm" style="background:var(--danger);" onclick="deleteRec(${r.id})">刪除</button>
+        </div>
+    </div>
+  `).join('') : '<div style="text-align:center;color:#aaa;">無紀錄</div>';
+}
+function deleteRec(id) { if (confirm("刪除？")) { let recs = JSON.parse(localStorage.getItem(HISTORY_KEY)).filter(r => r.id !== id); localStorage.setItem(HISTORY_KEY, JSON.stringify(recs)); renderHistory(); } }
+
+window.onload = init;
+</script>
+</body>
+</html>
