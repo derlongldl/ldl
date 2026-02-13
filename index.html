@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>跑步教練 V4.6.0</title>
+<title>跑步教練 V4.6.1</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -19,11 +19,17 @@ input { width: 60px; padding: 8px; text-align: center; border: 1px solid #ccc; b
 #trainingOverlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; color: #fff; z-index: 10000; flex-direction: column; justify-content: center; align-items: center; text-align: center; }
 .big-val { font-size: 5rem; font-weight: 900; color: var(--primary); font-family: monospace; }
 .btn-start { width: 100%; padding: 15px 5px; border: none; border-radius: 12px; color: white; font-size: 1rem; font-weight: bold; cursor: pointer; margin-top:10px; }
-#noteModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 30000; justify-content: center; align-items: center; }
+/* Modals */
+#noteModal, #mapModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 30000; justify-content: center; align-items: center; }
+#mapModal { background: white; flex-direction: column; }
 .note-box { background: white; width: 85%; border-radius: 15px; padding: 20px; }
-#noteArea { width: 100%; height: 150px; margin-top: 10px; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 1.1rem; line-height: 1.6; }
-.history-card { background: white; border-radius: 10px; padding: 10px; margin-bottom: 8px; border-left: 5px solid var(--primary); }
-.note-display { white-space: pre-wrap; background: #f4f4f4; padding: 8px; border-radius: 5px; margin: 8px 0; font-size: 14px; color: #333; }
+#noteArea { width: 100%; height: 150px; margin-top: 10px; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 1.1rem; line-height: 1.6; box-sizing: border-box; }
+#map { flex-grow: 1; width: 100%; }
+/* History Card */
+.history-card { background: white; border-radius: 10px; padding: 12px; margin-bottom: 10px; border-left: 5px solid var(--primary); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+.note-display { white-space: pre-wrap; background: #f8f9fa; padding: 10px; border-radius: 8px; margin: 10px 0; font-size: 14px; color: #444; border: 1px solid #eee; }
+.history-btns { display: flex; gap: 5px; margin-top: 10px; }
+.btn-sm { flex: 1; padding: 10px 2px; font-size: 12px; border-radius: 6px; border: none; color: white; font-weight: bold; }
 </style>
 </head>
 <body>
@@ -34,17 +40,23 @@ input { width: 60px; padding: 8px; text-align: center; border: 1px solid #ccc; b
         <textarea id="noteArea"></textarea>
         <div style="display:flex; gap:10px; margin-top:15px;">
             <button onclick="closeNote()" style="flex:1; padding:12px; border:none; border-radius:8px; background:#888; color:white;">取消</button>
-            <button onclick="saveNote()" style="flex:1; padding:12px; border:none; border-radius:8px; background:var(--success); color:white; font-weight:bold;">儲存</button>
+            <button onclick="saveNote()" style="flex:1; padding:12px; border:none; border-radius:8px; background:var(--success); color:white;">儲存</button>
         </div>
     </div>
 </div>
 
+<div id="mapModal">
+  <div style="padding:15px; background:var(--primary); color:white; width:100%; text-align:center; font-weight:bold;">運動軌跡回顧</div>
+  <div id="map"></div>
+  <button onclick="closeMap()" style="padding:15px; width:100%; background:#444; color:white; border:none; font-size:1.1rem;">關閉地圖</button>
+</div>
+
 <div id="trainingOverlay">
   <div id="statusTop" style="font-size: 2.5rem; font-weight: bold; color: var(--success);">● 準備中</div>
-  <div id="phaseDetail" style="font-size: 1.4rem; color: #ffeb3b; margin-bottom: 15px;">節拍器加載中...</div>
+  <div id="phaseDetail" style="font-size: 1.4rem; color: #ffeb3b; margin-bottom: 15px;">初始化音訊...</div>
   <div style="color:#888;">累積公里 KM</div>
   <div id="bigDistance" class="big-val">0.000</div>
-  <div id="soundMode" style="color: var(--info); font-size: 14px; margin-bottom: 10px;">🎵 音效啟動中</div>
+  <div id="soundMode" style="color: var(--info); font-size: 14px; margin-bottom: 10px;">🎵 音效 A (強化音)</div>
   <div style="display:flex; width:90%; justify-content:space-around;">
       <div><div style="font-size:0.8rem; color:#888;">配速</div><div id="bigPace" style="font-size:2.2rem; font-family:monospace;">--:--</div></div>
       <div><div style="font-size:0.8rem; color:#888;">時間</div><div id="bigElapsed" style="font-size:2.2rem; font-family:monospace;">00:00</div></div>
@@ -53,7 +65,7 @@ input { width: 60px; padding: 8px; text-align: center; border: 1px solid #ccc; b
 </div>
 
 <div class="card">
-  <h2>🏃 跑步教練 V4.6.0</h2>
+  <h2>🏃 跑步教練 V4.6.1</h2>
   <table>
     <tbody>
       <tr><td><b>熱身</b></td><td>BPM <input type="number" id="bpm0"></td><td>秒 <input type="number" id="sec0"></td></tr>
@@ -67,7 +79,7 @@ input { width: 60px; padding: 8px; text-align: center; border: 1px solid #ccc; b
   <div class="ctrl-row">
     <span>循環：<input id="loopCount" type="number" style="width:40px;"></span>
     <span>步進：<input id="thresholdStep" type="number" step="0.01" style="width:45px;"></span>
-    <span>預計 <b id="totalPlanTime" style="color:var(--primary)">0</b> 分</span>
+    <span>預計 <b id="totalPlanTime" style="color:var(--primary)">0</b> 分鐘</span>
   </div>
 
   <div class="thres-row">
@@ -90,15 +102,16 @@ input { width: 60px; padding: 8px; text-align: center; border: 1px solid #ccc; b
 </div>
 
 <script>
-const HISTORY_KEY = 'run_history_v460'; 
-const CONFIG_KEY = 'run_config_v460';
+const HISTORY_KEY = 'run_history_v461'; 
+const CONFIG_KEY = 'run_config_v461';
 const DEFAULT_BPM = [180, 205, 215, 195, 180];
 const DEFAULT_SEC = [180, 60, 60, 120, 180];
 
 let config = { bpm: [...DEFAULT_BPM], sec: [...DEFAULT_SEC], loops: 1, threshold: 0.30, step: 0.01 };
 let isRunning = false, totalDist = 0, elapsedSec = 0, currentEditingId = null;
-let audioCtx = null, watchId = null, timerId = null;
-let startNote = { location: "未知路段", weather: "氣溫獲取中" };
+let audioCtx = null, watchId = null, timerId = null, trackPoints = [];
+let startNote = { location: "地點獲取中", weather: "氣溫獲取中" };
+let map = null, polyline = null;
 
 function forceRender() {
     const saved = localStorage.getItem(CONFIG_KEY);
@@ -135,27 +148,19 @@ function calcTotalTime() {
 function syncThresUI() { document.querySelectorAll('.liveThresDisp').forEach(el => el.innerText = config.threshold.toFixed(2)); }
 function adjThres(dir) { config.threshold += (dir * config.step); syncThresUI(); updateUI(); }
 
-// --- 啟動邏輯修正 ---
 async function toggleStart(isAuto) {
     isRunning = true;
     document.getElementById('trainingOverlay').style.display = 'flex';
-    
-    // 1. 立即初始化音訊
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     if (audioCtx.state === 'suspended') audioCtx.resume();
-    document.getElementById('soundMode').innerText = "🎵 音效 A (強化音)";
-
-    // 2. 立即開啟秒數計時 (不等待 GPS)
-    elapsedSec = 0; totalDist = 0;
+    
+    elapsedSec = 0; totalDist = 0; trackPoints = [];
     timerId = setInterval(() => {
         elapsedSec++;
         document.getElementById('bigElapsed').innerText = formatTime(elapsedSec);
     }, 1000);
 
-    // 3. 啟動節拍邏輯 (不等待 GPS)
     startTrainingFlow(isAuto);
-
-    // 4. 背景啟動 GPS
     startGPS();
 }
 
@@ -199,8 +204,8 @@ function startGPS() {
     watchId = navigator.geolocation.watchPosition(pos => {
         const { latitude: lat, longitude: lon, accuracy } = pos.coords;
         if (accuracy < 60) {
+            trackPoints.push({lat, lon});
             if (!lastPos) {
-                // 抓一次天氣與地址
                 fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`).then(res=>res.json()).then(d=>startNote.location=d.display_name.split(',')[0]);
                 fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`).then(res=>res.json()).then(d=>startNote.weather=`氣溫 ${d.current_weather.temperature}°C`);
             } else {
@@ -208,7 +213,7 @@ function startGPS() {
                 if (d > config.threshold && d < 50) {
                     totalDist += d;
                     document.getElementById('bigDistance').innerText = (totalDist/1000).toFixed(3);
-                    document.getElementById('bigPace').innerText = formatTime(Math.floor(elapsedSec/(totalDist/1000)));
+                    if(totalDist > 5) document.getElementById('bigPace').innerText = formatTime(Math.floor(elapsedSec/(totalDist/1000)));
                 }
             }
             lastPos = {lat, lon};
@@ -217,12 +222,15 @@ function startGPS() {
 }
 
 function stopAndSave() {
-    isRunning = false;
-    clearInterval(timerId);
+    isRunning = false; clearInterval(timerId);
     if(watchId) navigator.geolocation.clearWatch(watchId);
     if(totalDist > 0) {
         const records = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
-        records.unshift({ id: Date.now(), date: new Date().toLocaleString(), dist: (totalDist/1000).toFixed(3), time: formatTime(elapsedSec), note: `📍 起點：${startNote.location}\n☀️ 天氣：${startNote.weather}` });
+        records.unshift({ 
+            id: Date.now(), date: new Date().toLocaleString(), dist: (totalDist/1000).toFixed(3), 
+            time: formatTime(elapsedSec), points: trackPoints,
+            note: `📍 起點：${startNote.location}\n☀️ 天氣：${startNote.weather}` 
+        });
         localStorage.setItem(HISTORY_KEY, JSON.stringify(records));
     }
     location.reload();
@@ -235,24 +243,34 @@ function renderHistory() {
             <div style="font-size:11px; color:#888;">📅 ${r.date}</div>
             <b style="font-size:1.2rem; color:var(--primary);">🏃 ${r.dist} km | ⏱️ ${r.time}</b>
             <div class="note-display">${r.note}</div>
-            <button class="btn-sm" style="background:var(--note); width:100%; padding:8px; color:white; border:none; border-radius:5px;" onclick="editNote(${r.id})">修改備註</button>
+            <div class="history-btns">
+                <button class="btn-sm" style="background:var(--info);" onclick="viewTrack(${r.id})">軌跡</button>
+                <button class="btn-sm" style="background:var(--note);" onclick="editNote(${r.id})">備註</button>
+                <button class="btn-sm" style="background:var(--success);" onclick="editDist(${r.id})">修正</button>
+                <button class="btn-sm" style="background:var(--danger);" onclick="deleteRec(${r.id})">刪除</button>
+            </div>
         </div>
     `).join('');
 }
 
-function editNote(id) {
-    currentEditingId = id;
-    let recs = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
-    document.getElementById('noteArea').value = recs.find(r => r.id === id).note;
-    document.getElementById('noteModal').style.display = 'flex';
-}
-function saveNote() {
-    let recs = JSON.parse(localStorage.getItem(HISTORY_KEY));
-    recs.find(r => r.id === currentEditingId).note = document.getElementById('noteArea').value;
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(recs));
-    closeNote(); renderHistory();
-}
+// 功能函數回歸
+function editNote(id) { currentEditingId = id; document.getElementById('noteArea').value = JSON.parse(localStorage.getItem(HISTORY_KEY)).find(r => r.id === id).note; document.getElementById('noteModal').style.display = 'flex'; }
+function saveNote() { let recs = JSON.parse(localStorage.getItem(HISTORY_KEY)); recs.find(r => r.id === currentEditingId).note = document.getElementById('noteArea').value; localStorage.setItem(HISTORY_KEY, JSON.stringify(recs)); closeNote(); renderHistory(); }
 function closeNote() { document.getElementById('noteModal').style.display = 'none'; }
+function deleteRec(id) { if (confirm("確定刪除此紀錄？")) { let recs = JSON.parse(localStorage.getItem(HISTORY_KEY)).filter(r => r.id !== id); localStorage.setItem(HISTORY_KEY, JSON.stringify(recs)); renderHistory(); } }
+function editDist(id) { let recs = JSON.parse(localStorage.getItem(HISTORY_KEY)); let idx = recs.findIndex(r => r.id === id); let newVal = prompt("修正里程 (km):", recs[idx].dist); if(newVal) { recs[idx].dist = parseFloat(newVal).toFixed(3); localStorage.setItem(HISTORY_KEY, JSON.stringify(recs)); renderHistory(); } }
+function viewTrack(id) {
+    const r = JSON.parse(localStorage.getItem(HISTORY_KEY)).find(r => r.id === id);
+    if (!r.points || r.points.length < 2) return alert("點位不足，無法顯示軌跡。");
+    document.getElementById('mapModal').style.display = 'flex';
+    setTimeout(() => {
+        if (!map) { map = L.map('map').setView([r.points[0].lat, r.points[0].lon], 16); L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map); }
+        if (polyline) map.removeLayer(polyline);
+        polyline = L.polyline(r.points.map(p => [p.lat, p.lon]), { color: '#ff6a00', weight: 5 }).addTo(map);
+        map.fitBounds(polyline.getBounds());
+    }, 200);
+}
+function closeMap() { document.getElementById('mapModal').style.display = 'none'; }
 function formatTime(s) { return Math.floor(s/60).toString().padStart(2,'0')+":"+(s%60).toString().padStart(2,'0'); }
 function haversine(lat1, lon1, lat2, lon2) { const R = 6371000; const dLat = (lat2-lat1)*Math.PI/180, dLon = (lon2-lon1)*Math.PI/180; const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2; return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); }
 
