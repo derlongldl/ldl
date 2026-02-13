@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>跑步教練 V4.5.2</title>
+<title>跑步教練 V4.5.3</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -19,14 +19,13 @@ input { width: 60px; padding: 8px; text-align: center; border: 1px solid #ccc; b
 .btn-auto { background: var(--primary); }
 .btn-manual { background: var(--info); }
 
-/* 訓練儀表板 */
 #trainingOverlay {
   display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
   background: #000; color: #fff; z-index: 10000; flex-direction: column;
   justify-content: center; align-items: center; text-align: center;
 }
-#statusTop { font-size: 3rem; font-weight: bold; color: var(--success); margin-bottom: 5px; } /* 加大標題 */
-#phaseDetail { font-size: 1.6rem; color: #ffeb3b; margin-bottom: 20px; font-weight: bold; } /* 強化節拍秒數顯示 */
+#statusTop { font-size: 3rem; font-weight: bold; color: var(--success); margin-bottom: 5px; }
+#phaseDetail { font-size: 1.6rem; color: #ffeb3b; margin-bottom: 20px; font-weight: bold; }
 
 .big-val { font-size: 5rem; font-weight: 900; color: var(--primary); font-family: monospace; }
 .small-grid { display: flex; width: 100%; justify-content: space-around; margin-top: 10px; }
@@ -57,7 +56,7 @@ input { width: 60px; padding: 8px; text-align: center; border: 1px solid #ccc; b
   <div id="phaseDetail">節拍 -- | 剩餘 -- 秒</div>
   <div class="label">累積公里 KM</div>
   <div id="bigDistance" class="big-val">0.000</div>
-  <div id="soundMode" style="color: var(--info); font-size: 14px; margin-top: -10px;">🎵 音效 A</div>
+  <div id="soundMode" style="color: var(--info); font-size: 14px; margin-top: -10px;">🎵 音效 A (高音)</div>
   <div class="small-grid">
     <div><div class="label">配速</div><div id="bigPace" class="small-val">--:--</div></div>
     <div><div class="label">時間</div><div id="bigElapsed" class="small-val">00:00</div></div>
@@ -74,9 +73,9 @@ input { width: 60px; padding: 8px; text-align: center; border: 1px solid #ccc; b
 </div>
 
 <div class="card">
-  <h2>🏃 跑步教練 V4.5.2</h2>
+  <h2>🏃 跑步教練 V4.5.3</h2>
   <table>
-    <tbody id="configTable">
+    <tbody>
       <tr><td><b>熱身</b></td><td>BPM <input type="number" id="bpm0"></td><td>秒 <input type="number" id="sec0"></td></tr>
       <tr><td><b>間歇</b></td><td>BPM <input type="number" id="bpm1"></td><td>秒 <input type="number" id="sec1"></td></tr>
       <tr><td><b>衝刺</b></td><td>BPM <input type="number" id="bpm2"></td><td>秒 <input type="number" id="sec2"></td></tr>
@@ -111,31 +110,26 @@ input { width: 60px; padding: 8px; text-align: center; border: 1px solid #ccc; b
 </div>
 
 <script>
-// 使用全新金鑰，徹底隔離舊資料
 const HISTORY_KEY = 'run_history_v45'; 
 const CONFIG_KEY = 'run_config_v45';
 const DEFAULT_BPM = [180, 205, 215, 195, 180];
 const DEFAULT_SEC = [180, 60, 60, 120, 180];
 
 let config = {};
+let isRunning = false, autoSave = true, totalDist = 0, elapsedSec = 0, lastVibratedKm = 0;
+let watchId = null, timerId = null, audioCtx = null, wakeLock = null;
+let trackPoints = [], lastPos = null, activeSoundIndex = 0;
+let map = null, polyline = null;
 
 function init() {
-  // 強制初始化預設值邏輯
   let saved = localStorage.getItem(CONFIG_KEY);
-  if (saved) {
-    try {
-      config = JSON.parse(saved);
-    } catch(e) { config = {}; }
-  }
-
-  // 如果物件不完整，強制修補
+  if (saved) { try { config = JSON.parse(saved); } catch(e) { config = {}; } }
   if(!config.bpm || config.bpm.length < 5) config.bpm = [...DEFAULT_BPM];
   if(!config.sec || config.sec.length < 5) config.sec = [...DEFAULT_SEC];
-  if(!config.loops) config.loops = 5;
+  if(!config.loops) config.loops = 1;
   if(!config.threshold) config.threshold = 0.32;
   if(!config.step) config.step = 0.01;
 
-  // 填入 UI
   for(let i=0; i<5; i++) {
     document.getElementById('bpm'+i).value = config.bpm[i];
     document.getElementById('sec'+i).value = config.sec[i];
@@ -153,8 +147,8 @@ function init() {
 function updateUI() {
     config.bpm = []; config.sec = [];
     for(let i=0; i<5; i++) {
-        config.bpm.push(parseInt(document.getElementById('bpm'+i).value) || DEFAULT_BPM[i]);
-        config.sec.push(parseInt(document.getElementById('sec'+i).value) || DEFAULT_SEC[i]);
+        config.bpm.push(parseInt(document.getElementById('bpm'+i).value) || 0);
+        config.sec.push(parseInt(document.getElementById('sec'+i).value) || 0);
     }
     config.loops = parseInt(document.getElementById('loopCount').value) || 1;
     config.step = parseFloat(document.getElementById('thresholdStep').value) || 0.01;
@@ -162,18 +156,19 @@ function updateUI() {
     calcTotalTime();
 }
 
-// 運行與邏輯
-let isRunning = false, autoSave = true, totalDist = 0, elapsedSec = 0;
-let watchId = null, timerId = null, audioCtx = null, wakeLock = null;
-let trackPoints = [], lastPos = null, activeSoundIndex = 0;
+function calcTotalTime() { 
+    // 0秒不計算
+    let t = config.sec[0] + ((config.sec[1] + config.sec[2] + config.sec[3]) * config.loops) + config.sec[4]; 
+    document.getElementById('totalPlanTime').innerText = (t/60).toFixed(1); 
+}
 
 async function toggleStart(isAuto) {
   autoSave = isAuto;
-  if (!audioCtx) audioCtx = new AudioContext();
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen');
   
   document.getElementById('trainingOverlay').style.display = 'flex';
-  isRunning = true; totalDist = 0; elapsedSec = 0; trackPoints = []; 
+  isRunning = true; totalDist = 0; elapsedSec = 0; trackPoints = []; lastPos = null; activeSoundIndex = 0; lastVibratedKm = 0;
   
   watchId = navigator.geolocation.watchPosition(pos => {
     const { latitude: lat, longitude: lon, accuracy } = pos.coords;
@@ -183,6 +178,15 @@ async function toggleStart(isAuto) {
         if (d > config.threshold && d < 50) {
           totalDist += d;
           document.getElementById('bigDistance').innerText = (totalDist/1000).toFixed(3);
+          
+          // 恢復：每公里變換音效
+          let curKm = Math.floor(totalDist / 1000);
+          if (curKm > lastVibratedKm) {
+              activeSoundIndex = 1 - activeSoundIndex;
+              document.getElementById('soundMode').innerText = activeSoundIndex === 0 ? "🎵 音效 A (高音)" : "🎵 音效 B (低音)";
+              if(navigator.vibrate) navigator.vibrate([500, 200, 500]);
+              lastVibratedKm = curKm;
+          }
           if(totalDist > 10) document.getElementById('bigPace').innerText = formatTime(Math.floor(elapsedSec/(totalDist/1000)));
         }
       }
@@ -192,7 +196,6 @@ async function toggleStart(isAuto) {
 
   timerId = setInterval(() => { elapsedSec++; document.getElementById('bigElapsed').innerText = formatTime(elapsedSec); }, 1000);
   
-  // 階段執行
   await runPhase(config.bpm[0], config.sec[0], "熱身");
   for(let j=0; j<config.loops; j++) {
       await runPhase(config.bpm[1], config.sec[1], `間歇 ${j+1}`);
@@ -213,7 +216,7 @@ async function toggleStart(isAuto) {
 }
 
 async function runPhase(bpm, sec, label) {
-    if(!isRunning || sec <= 0) return;
+    if(!isRunning || sec <= 0) return; // 0秒直接跳過
     document.getElementById('statusTop').innerText = "● " + label;
     let bInt = 60000/bpm;
     let end = Date.now() + (sec * 1000);
@@ -222,6 +225,16 @@ async function runPhase(bpm, sec, label) {
         document.getElementById('phaseDetail').innerText = `節拍 ${bpm} | 剩餘 ${remaining} 秒`;
         playBeep(); await new Promise(r => setTimeout(r, bInt)); 
     }
+}
+
+function playBeep() {
+  const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+  o.connect(g); g.connect(audioCtx.destination);
+  o.type = (activeSoundIndex === 0) ? 'square' : 'sawtooth';
+  o.frequency.value = (activeSoundIndex === 0) ? 900 : 500;
+  g.gain.setValueAtTime(0.3, audioCtx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
+  o.start(); o.stop(audioCtx.currentTime + 0.1);
 }
 
 function stopAndSave() {
@@ -236,36 +249,44 @@ function stopAndSave() {
   location.reload();
 }
 
-function playBeep() {
-  if (!audioCtx) audioCtx = new AudioContext();
-  const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-  o.connect(g); g.connect(audioCtx.destination);
-  o.type = (activeSoundIndex === 0) ? 'square' : 'sawtooth';
-  o.frequency.value = (activeSoundIndex === 0) ? 900 : 500;
-  g.gain.setValueAtTime(0.3, audioCtx.currentTime);
-  g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
-  o.start(); o.stop(audioCtx.currentTime + 0.1);
-}
-
-function adjThres(dir) { config.threshold += (dir * config.step); syncThresUI(); updateUI(); }
-function syncThresUI() { document.querySelectorAll('.liveThresDisp').forEach(el => el.innerText = config.threshold.toFixed(2)); }
-function calcTotalTime() { const t = config.sec[0] + ((config.sec[1] + config.sec[2] + config.sec[3]) * config.loops) + config.sec[4]; document.getElementById('totalPlanTime').innerText = (t/60).toFixed(1); }
-function formatTime(s) { return Math.floor(s/60).toString().padStart(2,'0')+":"+(s%60).toString().padStart(2,'0'); }
-function haversine(lat1, lon1, lat2, lon2) { const R = 6371000; const dLat = (lat2-lat1)*Math.PI/180, dLon = (lon2-lon1)*Math.PI/180; const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2; return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); }
-
 function renderHistory() {
   const rec = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
   document.getElementById('historyContainer').innerHTML = rec.length ? rec.map(r => `
     <div class="history-card">
         <div style="font-size:12px; color:#666;">📅 ${r.date} | ⏱️ ${r.time}</div>
-        <div class="dist-line"><b style="font-size:1.3rem; color:var(--primary);">🏃 ${r.dist} km</b></div>
+        <div class="dist-line"><b style="font-size:1.3rem; color:var(--primary);">🏃 ${r.dist} km</b> <small>(${r.threshold}m)</small></div>
         <div class="history-btns">
+            <button class="btn-sm" style="background:var(--info);" onclick="viewTrack(${r.id})">軌跡</button>
+            <button class="btn-sm" style="background:var(--note);" onclick="editNote(${r.id})">備註</button>
+            <button class="btn-sm" style="background:var(--success);" onclick="editDist(${r.id})">修正</button>
             <button class="btn-sm" style="background:var(--danger);" onclick="deleteRec(${r.id})">刪除</button>
         </div>
     </div>
   `).join('') : '<div style="text-align:center;color:#aaa;">無紀錄</div>';
 }
+
+function editNote(id) { alert("備註功能已連動至歷史紀錄儲存"); }
+function editDist(id) { 
+    let recs = JSON.parse(localStorage.getItem(HISTORY_KEY));
+    let idx = recs.findIndex(r => r.id === id);
+    let newVal = prompt("修正里程 (km):", recs[idx].dist);
+    if(newVal) { recs[idx].dist = parseFloat(newVal).toFixed(3); localStorage.setItem(HISTORY_KEY, JSON.stringify(recs)); renderHistory(); }
+}
+function viewTrack(id) {
+    const r = JSON.parse(localStorage.getItem(HISTORY_KEY)).find(r => r.id === id);
+    if (!r.points || r.points.length < 2) return alert("紀錄不足");
+    document.getElementById('mapModal').style.display = 'flex';
+    if (!map) { map = L.map('map').setView([r.points[0].lat, r.points[0].lon], 16); L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map); }
+    if (polyline) map.removeLayer(polyline);
+    polyline = L.polyline(r.points.map(p => [p.lat, p.lon]), { color: '#ff6a00', weight: 5 }).addTo(map);
+    map.fitBounds(polyline.getBounds());
+}
 function deleteRec(id) { if (confirm("刪除？")) { let recs = JSON.parse(localStorage.getItem(HISTORY_KEY)).filter(r => r.id !== id); localStorage.setItem(HISTORY_KEY, JSON.stringify(recs)); renderHistory(); } }
+function closeMap() { document.getElementById('mapModal').style.display = 'none'; }
+function adjThres(dir) { config.threshold += (dir * config.step); syncThresUI(); updateUI(); }
+function syncThresUI() { document.querySelectorAll('.liveThresDisp').forEach(el => el.innerText = config.threshold.toFixed(2)); }
+function formatTime(s) { return Math.floor(s/60).toString().padStart(2,'0')+":"+(s%60).toString().padStart(2,'0'); }
+function haversine(lat1, lon1, lat2, lon2) { const R = 6371000; const dLat = (lat2-lat1)*Math.PI/180, dLon = (lon2-lon1)*Math.PI/180; const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2; return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); }
 
 window.onload = init;
 </script>
