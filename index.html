@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>跑步教練 V4.6.1</title>
+<title>跑步教練 V4.6.2</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -19,44 +19,28 @@ input { width: 60px; padding: 8px; text-align: center; border: 1px solid #ccc; b
 #trainingOverlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; color: #fff; z-index: 10000; flex-direction: column; justify-content: center; align-items: center; text-align: center; }
 .big-val { font-size: 5rem; font-weight: 900; color: var(--primary); font-family: monospace; }
 .btn-start { width: 100%; padding: 15px 5px; border: none; border-radius: 12px; color: white; font-size: 1rem; font-weight: bold; cursor: pointer; margin-top:10px; }
-/* Modals */
 #noteModal, #mapModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 30000; justify-content: center; align-items: center; }
 #mapModal { background: white; flex-direction: column; }
 .note-box { background: white; width: 85%; border-radius: 15px; padding: 20px; }
-#noteArea { width: 100%; height: 150px; margin-top: 10px; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 1.1rem; line-height: 1.6; box-sizing: border-box; }
+#noteArea { width: 100%; height: 150px; margin-top: 10px; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 1.1rem; box-sizing: border-box; }
 #map { flex-grow: 1; width: 100%; }
-/* History Card */
 .history-card { background: white; border-radius: 10px; padding: 12px; margin-bottom: 10px; border-left: 5px solid var(--primary); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-.note-display { white-space: pre-wrap; background: #f8f9fa; padding: 10px; border-radius: 8px; margin: 10px 0; font-size: 14px; color: #444; border: 1px solid #eee; }
+.note-display { white-space: pre-wrap; background: #f8f9fa; padding: 10px; border-radius: 8px; margin: 10px 0; font-size: 14px; border: 1px solid #eee; }
 .history-btns { display: flex; gap: 5px; margin-top: 10px; }
 .btn-sm { flex: 1; padding: 10px 2px; font-size: 12px; border-radius: 6px; border: none; color: white; font-weight: bold; }
 </style>
 </head>
 <body>
 
-<div id="noteModal">
-    <div class="note-box">
-        <h3 style="margin:0; color:var(--note);">📝 編輯跑步備註</h3>
-        <textarea id="noteArea"></textarea>
-        <div style="display:flex; gap:10px; margin-top:15px;">
-            <button onclick="closeNote()" style="flex:1; padding:12px; border:none; border-radius:8px; background:#888; color:white;">取消</button>
-            <button onclick="saveNote()" style="flex:1; padding:12px; border:none; border-radius:8px; background:var(--success); color:white;">儲存</button>
-        </div>
-    </div>
-</div>
-
-<div id="mapModal">
-  <div style="padding:15px; background:var(--primary); color:white; width:100%; text-align:center; font-weight:bold;">運動軌跡回顧</div>
-  <div id="map"></div>
-  <button onclick="closeMap()" style="padding:15px; width:100%; background:#444; color:white; border:none; font-size:1.1rem;">關閉地圖</button>
-</div>
+<div id="noteModal"><div class="note-box"><h3 style="margin:0; color:var(--note);">📝 編輯跑步備註</h3><textarea id="noteArea"></textarea><div style="display:flex; gap:10px; margin-top:15px;"><button onclick="closeNote()" style="flex:1; padding:12px; background:#888; color:white; border:none; border-radius:8px;">取消</button><button onclick="saveNote()" style="flex:1; padding:12px; background:var(--success); color:white; border:none; border-radius:8px;">儲存</button></div></div></div>
+<div id="mapModal"><div style="padding:15px; background:var(--primary); color:white; width:100%; text-align:center; font-weight:bold;">運動軌跡回顧</div><div id="map"></div><button onclick="closeMap()" style="padding:15px; width:100%; background:#444; color:white; border:none; font-size:1.1rem;">關閉地圖</button></div>
 
 <div id="trainingOverlay">
   <div id="statusTop" style="font-size: 2.5rem; font-weight: bold; color: var(--success);">● 準備中</div>
-  <div id="phaseDetail" style="font-size: 1.4rem; color: #ffeb3b; margin-bottom: 15px;">初始化音訊...</div>
+  <div id="phaseDetail" style="font-size: 1.4rem; color: #ffeb3b; margin-bottom: 15px;">節拍器啟動中...</div>
   <div style="color:#888;">累積公里 KM</div>
   <div id="bigDistance" class="big-val">0.000</div>
-  <div id="soundMode" style="color: var(--info); font-size: 14px; margin-bottom: 10px;">🎵 音效 A (強化音)</div>
+  <div id="soundMode" style="color: var(--info); font-size: 14px; margin-bottom: 10px;">🎵 目前音效：A (標準)</div>
   <div style="display:flex; width:90%; justify-content:space-around;">
       <div><div style="font-size:0.8rem; color:#888;">配速</div><div id="bigPace" style="font-size:2.2rem; font-family:monospace;">--:--</div></div>
       <div><div style="font-size:0.8rem; color:#888;">時間</div><div id="bigElapsed" style="font-size:2.2rem; font-family:monospace;">00:00</div></div>
@@ -65,7 +49,7 @@ input { width: 60px; padding: 8px; text-align: center; border: 1px solid #ccc; b
 </div>
 
 <div class="card">
-  <h2>🏃 跑步教練 V4.6.1</h2>
+  <h2>🏃 跑步教練 V4.6.2</h2>
   <table>
     <tbody>
       <tr><td><b>熱身</b></td><td>BPM <input type="number" id="bpm0"></td><td>秒 <input type="number" id="sec0"></td></tr>
@@ -102,8 +86,8 @@ input { width: 60px; padding: 8px; text-align: center; border: 1px solid #ccc; b
 </div>
 
 <script>
-const HISTORY_KEY = 'run_history_v461'; 
-const CONFIG_KEY = 'run_config_v461';
+const HISTORY_KEY = 'run_history_v462'; 
+const CONFIG_KEY = 'run_config_v462';
 const DEFAULT_BPM = [180, 205, 215, 195, 180];
 const DEFAULT_SEC = [180, 60, 60, 120, 180];
 
@@ -111,6 +95,7 @@ let config = { bpm: [...DEFAULT_BPM], sec: [...DEFAULT_SEC], loops: 1, threshold
 let isRunning = false, totalDist = 0, elapsedSec = 0, currentEditingId = null;
 let audioCtx = null, watchId = null, timerId = null, trackPoints = [];
 let startNote = { location: "地點獲取中", weather: "氣溫獲取中" };
+let currentBeepMode = 'A'; // 'A' 為標準音 950Hz, 'B' 為高頻音 1400Hz
 let map = null, polyline = null;
 
 function forceRender() {
@@ -154,7 +139,7 @@ async function toggleStart(isAuto) {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     if (audioCtx.state === 'suspended') audioCtx.resume();
     
-    elapsedSec = 0; totalDist = 0; trackPoints = [];
+    elapsedSec = 0; totalDist = 0; trackPoints = []; currentBeepMode = 'A';
     timerId = setInterval(() => {
         elapsedSec++;
         document.getElementById('bigElapsed').innerText = formatTime(elapsedSec);
@@ -184,15 +169,20 @@ async function runPhase(bpm, sec, label) {
     while(Date.now() < end && isRunning) {
         let remaining = Math.round((end - Date.now()) / 1000);
         document.getElementById('phaseDetail').innerText = `節拍 ${bpm} | 剩餘 ${remaining} 秒`;
-        playBeep(bpm > 200 ? 1.2 : 0.8); 
+        
+        // 核心邏輯：根據目前的 mode 決定頻率
+        let freq = (currentBeepMode === 'A') ? 950 : 1400;
+        playBeep(freq, bpm > 200 ? 1.2 : 0.8); 
+        
         await new Promise(r => setTimeout(r, bInt));
     }
 }
 
-function playBeep(vol) {
+function playBeep(freq, vol) {
     const o = audioCtx.createOscillator(), g = audioCtx.createGain();
     o.connect(g); g.connect(audioCtx.destination);
-    o.type = 'square'; o.frequency.value = 950;
+    o.type = 'square'; 
+    o.frequency.value = freq;
     g.gain.setValueAtTime(vol, audioCtx.currentTime);
     g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
     o.start(); o.stop(audioCtx.currentTime + 0.1);
@@ -211,7 +201,16 @@ function startGPS() {
             } else {
                 const d = haversine(lastPos.lat, lastPos.lon, lat, lon);
                 if (d > config.threshold && d < 50) {
+                    let oldKM = Math.floor(totalDist / 1000);
                     totalDist += d;
+                    let newKM = Math.floor(totalDist / 1000);
+                    
+                    // --- 每公里切換音效邏輯 ---
+                    if (newKM > oldKM) {
+                        currentBeepMode = (currentBeepMode === 'A') ? 'B' : 'A';
+                        document.getElementById('soundMode').innerText = `🎵 目前音效：${currentBeepMode} (${currentBeepMode === 'A' ? '標準' : '高頻'})`;
+                    }
+                    
                     document.getElementById('bigDistance').innerText = (totalDist/1000).toFixed(3);
                     if(totalDist > 5) document.getElementById('bigPace').innerText = formatTime(Math.floor(elapsedSec/(totalDist/1000)));
                 }
@@ -253,7 +252,6 @@ function renderHistory() {
     `).join('');
 }
 
-// 功能函數回歸
 function editNote(id) { currentEditingId = id; document.getElementById('noteArea').value = JSON.parse(localStorage.getItem(HISTORY_KEY)).find(r => r.id === id).note; document.getElementById('noteModal').style.display = 'flex'; }
 function saveNote() { let recs = JSON.parse(localStorage.getItem(HISTORY_KEY)); recs.find(r => r.id === currentEditingId).note = document.getElementById('noteArea').value; localStorage.setItem(HISTORY_KEY, JSON.stringify(recs)); closeNote(); renderHistory(); }
 function closeNote() { document.getElementById('noteModal').style.display = 'none'; }
