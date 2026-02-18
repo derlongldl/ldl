@@ -2,12 +2,12 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>跑步教練 V4.6.4</title>
+<title>跑步教練 V4.6.4 (GPX 匯出版)</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
-:root { --primary: #ff6a00; --bg: #f0f2f5; --card: #ffffff; --danger: #e74c3c; --success: #2ecc71; --info: #3498db; --note: #9b59b6; }
+:root { --primary: #ff6a00; --bg: #f0f2f5; --card: #ffffff; --danger: #e74c3c; --success: #2ecc71; --info: #3498db; --note: #9b59b6; --dark: #2c3e50; }
 body { font-family: system-ui, sans-serif; background: var(--bg); margin: 0; padding: 5px; }
 .card { background: var(--card); border-radius: 12px; padding: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 10px; }
 h2 { text-align:center; color:var(--primary); margin:5px 0; }
@@ -26,8 +26,8 @@ input { width: 60px; padding: 8px; text-align: center; border: 1px solid #ccc; b
 #map { flex-grow: 1; width: 100%; }
 .history-card { background: white; border-radius: 10px; padding: 12px; margin-bottom: 10px; border-left: 5px solid var(--primary); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
 .note-display { white-space: pre-wrap; background: #f8f9fa; padding: 10px; border-radius: 8px; margin: 10px 0; font-size: 14px; color: #444; border: 1px solid #eee; }
-.history-btns { display: flex; gap: 5px; margin-top: 10px; }
-.btn-sm { flex: 1; padding: 10px 2px; font-size: 12px; border-radius: 6px; border: none; color: white; font-weight: bold; }
+.history-btns { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
+.btn-sm { flex: 1 1 20%; min-width: 60px; padding: 10px 2px; font-size: 12px; border-radius: 6px; border: none; color: white; font-weight: bold; }
 </style>
 </head>
 <body>
@@ -95,7 +95,7 @@ let config = { bpm: [...DEFAULT_BPM], sec: [...DEFAULT_SEC], loops: 1, threshold
 let isRunning = false, totalDist = 0, elapsedSec = 0, currentEditingId = null;
 let audioCtx = null, watchId = null, timerId = null, trackPoints = [];
 let startNote = { location: "地點獲取中", weather: "氣溫獲取中" };
-let currentBeepMode = 'A'; // 每公里切換模式
+let currentBeepMode = 'A'; 
 let map = null, polyline = null;
 
 function forceRender() {
@@ -150,7 +150,6 @@ async function toggleStart(isAuto) {
 }
 
 async function startTrainingFlow(isAuto) {
-    // 執行設定階段
     await runPhase(config.bpm[0], config.sec[0], "熱身");
     for(let j=0; j<config.loops; j++) {
         if(!isRunning) break;
@@ -160,7 +159,6 @@ async function startTrainingFlow(isAuto) {
     }
     if(isRunning) await runPhase(config.bpm[4], config.sec[4], "舒緩");
     
-    // --- 續跑與里程提醒相容邏輯 ---
     if(isRunning) {
         if(isAuto) {
             stopAndSave();
@@ -172,7 +170,7 @@ async function startTrainingFlow(isAuto) {
                 let bInt = 60000/bpm;
                 document.getElementById('phaseDetail').innerText = `續跑 BPM ${bpm} | 無限模式`;
                 let freq = (currentBeepMode === 'A') ? 950 : 1400;
-                playBeep(freq, 0.8, 0.07); // 續跑音效稍微縮短一點
+                playBeep(freq, 0.8, 0.07); 
                 await new Promise(r => setTimeout(r, bInt));
             }
         }
@@ -208,7 +206,7 @@ function startGPS() {
     watchId = navigator.geolocation.watchPosition(pos => {
         const { latitude: lat, longitude: lon, accuracy } = pos.coords;
         if (accuracy < 60) {
-            trackPoints.push({lat, lon});
+            trackPoints.push({lat, lon, time: new Date().toISOString()});
             if (!lastPos) {
                 fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`).then(res=>res.json()).then(d=>startNote.location=d.display_name.split(',')[0]);
                 fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`).then(res=>res.json()).then(d=>startNote.weather=`氣溫 ${d.current_weather.temperature}°C`);
@@ -218,7 +216,6 @@ function startGPS() {
                     let oldKM = Math.floor(totalDist / 1000);
                     totalDist += d;
                     let newKM = Math.floor(totalDist / 1000);
-                    // 每公里切換音效模式
                     if (newKM > oldKM) {
                         currentBeepMode = (currentBeepMode === 'A') ? 'B' : 'A';
                         document.getElementById('soundMode').innerText = `🎵 目前音效：${currentBeepMode} (${currentBeepMode === 'A' ? '標準' : '高頻'})`;
@@ -238,8 +235,12 @@ function stopAndSave() {
     if(totalDist > 0) {
         const records = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
         records.unshift({ 
-            id: Date.now(), date: new Date().toLocaleString(), dist: (totalDist/1000).toFixed(3), 
-            time: formatTime(elapsedSec), points: trackPoints,
+            id: Date.now(), 
+            date: new Date().toLocaleString(), 
+            dist: (totalDist/1000).toFixed(3), 
+            time: formatTime(elapsedSec), 
+            points: trackPoints,
+            threshold: config.threshold.toFixed(2),
             note: `📍 起點：${startNote.location}\n☀️ 天氣：${startNote.weather}` 
         });
         localStorage.setItem(HISTORY_KEY, JSON.stringify(records));
@@ -252,16 +253,53 @@ function renderHistory() {
     document.getElementById('historyContainer').innerHTML = rec.map(r => `
         <div class="history-card">
             <div style="font-size:11px; color:#888;">📅 ${r.date}</div>
-            <b style="font-size:1.2rem; color:var(--primary);">🏃 ${r.dist} km | ⏱️ ${r.time}</b>
+            <div style="margin-top:4px;">
+                <b style="font-size:1.2rem; color:var(--primary);">🏃 ${r.dist} km | ⏱️ ${r.time}</b>
+            </div>
+            <div style="font-size:12px; color:var(--info); margin-bottom:5px;">🛰️ GPS 門檻: ${r.threshold || '0.30'}m</div>
             <div class="note-display">${r.note}</div>
             <div class="history-btns">
                 <button class="btn-sm" style="background:var(--info);" onclick="viewTrack(${r.id})">軌跡</button>
                 <button class="btn-sm" style="background:var(--note);" onclick="editNote(${r.id})">備註</button>
                 <button class="btn-sm" style="background:var(--success);" onclick="editDist(${r.id})">修正</button>
+                <button class="btn-sm" style="background:var(--dark);" onclick="exportGPX(${r.id})">匯出</button>
                 <button class="btn-sm" style="background:var(--danger);" onclick="deleteRec(${r.id})">刪除</button>
             </div>
         </div>
     `).join('');
+}
+
+function exportGPX(id) {
+    const r = JSON.parse(localStorage.getItem(HISTORY_KEY)).find(r => r.id === id);
+    if (!r.points || r.points.length === 0) return alert("無 GPS 資料可供匯出");
+
+    let gpx = `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="RunningCoachV4" xmlns="http://www.topografix.com/GPX/1/1">
+  <trk>
+    <name>Running Coach - ${r.date}</name>
+    <trkseg>`;
+
+    r.points.forEach(p => {
+        gpx += `
+      <trkpt lat="${p.lat}" lon="${p.lon}">
+        <time>${p.time || new Date(r.id).toISOString()}</time>
+      </trkpt>`;
+    });
+
+    gpx += `
+    </trkseg>
+  </trk>
+</gpx>`;
+
+    const blob = new Blob([gpx], { type: 'application/gpx+xml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Run_${r.id}.gpx`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
 }
 
 function editNote(id) { currentEditingId = id; document.getElementById('noteArea').value = JSON.parse(localStorage.getItem(HISTORY_KEY)).find(r => r.id === id).note; document.getElementById('noteModal').style.display = 'flex'; }
