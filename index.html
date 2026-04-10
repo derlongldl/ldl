@@ -2,83 +2,74 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>跑步教練 V5.6.3 - 強制修復版</title>
+<title>跑步教練 V5.6.1 - 穩定回退版</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
 :root { --primary: #ff6a00; --bg: #f0f2f5; --card: #ffffff; --danger: #e74c3c; --success: #2ecc71; --info: #3498db; --dark: #2c3e50; --note: #9b59b6; }
-body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); margin: 0; padding: 5px; min-height: 100vh; }
-.card { background: var(--card); border-radius: 12px; padding: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 10px; border: 1px solid #eee; }
+body { font-family: system-ui, sans-serif; background: var(--bg); margin: 0; padding: 5px; }
+.card { background: var(--card); border-radius: 12px; padding: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 10px; }
 h2 { text-align:center; color:var(--primary); margin:5px 0; font-size: 1.2rem; }
-table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; margin: 10px 0; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
 th { background: #f8f9fa; padding: 8px 2px; border: 1px solid #dee2e6; color: #555; }
 td { padding: 6px 2px; border: 1px solid #dee2e6; text-align: center; }
-input { width: 85%; padding: 8px 2px; text-align: center; border: 1px solid #ccc; border-radius: 4px; font-size: 1rem; }
-.pace-text { color: var(--primary); font-weight: bold; font-family: monospace; font-size: 1.1rem; }
-.big-val { font-size: 5.5rem; font-weight: 900; color: var(--primary); font-family: monospace; line-height: 1; margin: 10px 0; }
-.btn-action { padding: 18px; border: none; border-radius: 15px; font-size: 1.1rem; font-weight: bold; color: #fff; cursor: pointer; transition: opacity 0.2s; }
-.btn-action:disabled { opacity: 0.5; cursor: not-allowed; }
+input { width: 90%; padding: 8px 0; text-align: center; border: 1px solid #ccc; border-radius: 4px; font-size: 0.95rem; }
+.pace-text { color: var(--primary); font-weight: bold; font-family: monospace; font-size: 1.25rem; }
+.big-val { font-size: 6rem; font-weight: 900; color: var(--primary); font-family: monospace; line-height: 1; margin: 10px 0; }
+.btn-action { padding: 18px; border: none; border-radius: 15px; font-size: 1.1rem; font-weight: bold; color: #fff; cursor: pointer; }
+.btn-block { width: 100%; display: block; }
+/* 修正：更直覺的模式選擇層 */
 #modeOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #f0f2f5; z-index: 99999; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 20px; }
-.btn-mode { width: 80%; padding: 30px 20px; font-size: 1.4rem; font-weight: bold; color: white; border: none; border-radius: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+.btn-mode { width: 80%; padding: 35px 20px; font-size: 1.4rem; font-weight: bold; color: white; border: none; border-radius: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
 #trainingOverlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; color: #fff; z-index: 10000; flex-direction: column; justify-content: center; align-items: center; padding: 20px; box-sizing: border-box; }
 .bottom-bar { position: absolute; bottom: 30px; left: 20px; right: 20px; }
 #mapModal, #noteModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 30000; justify-content: center; align-items: center; }
 #map { width: 100%; height: 80%; background: white; }
 .note-box { background: white; width: 85%; border-radius: 15px; padding: 20px; color: #333; }
 #noteArea { width: 100%; height: 120px; margin-top: 10px; padding: 8px; font-size: 14px; border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box; }
-.history-card { background: white; border-radius: 10px; padding: 12px; margin-bottom: 10px; border-left: 5px solid var(--primary); font-size: 14px; }
-.history-btns { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
-.btn-sm { flex: 1; min-width: 60px; padding: 10px 2px; font-size: 12px; border-radius: 6px; border: none; color: white; font-weight: bold; }
-.switch-container { display: flex; justify-content: space-between; align-items: center; padding: 12px 5px; border-top: 1px dashed #eee; margin-top: 10px; }
-.switch { position: relative; display: inline-block; width: 46px; height: 26px; }
-.switch input { opacity: 0; width: 0; height: 0; }
-.slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 26px; }
-.slider:before { position: absolute; content: ""; height: 20px; width: 20px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
-input:checked + .slider { background-color: var(--primary); }
-input:checked + .slider:before { transform: translateX(20px); }
+.history-card { background: white; border-radius: 10px; padding: 12px; margin-bottom: 10px; border-left: 5px solid var(--primary); }
+.history-btns { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+.btn-sm { flex: 1; min-width: 55px; padding: 8px 2px; font-size: 11px; border-radius: 6px; border: none; color: white; font-weight: bold; }
 </style>
 </head>
 <body>
 
-<div id="modeOverlay">
-    <h2>🏃 請選擇跑步模式</h2>
+<div id="modeOverlay" style="display:none;">
+    <h2 style="margin-bottom:10px;">🏃 請選擇跑步模式</h2>
     <button class="btn-mode" style="background: var(--primary);" onclick="selectMode('interval')">亞索 800 (間歇)</button>
     <button class="btn-mode" style="background: var(--info);" onclick="selectMode('general')">一般練跑模式</button>
 </div>
 
 <div id="noteModal"><div class="note-box"><h3>📝 訓練備註</h3><textarea id="noteArea"></textarea><div style="display:flex; gap:10px; margin-top:15px;"><button onclick="closeNote()" style="flex:1; padding:10px;">取消</button><button onclick="saveNote()" style="flex:1; padding:10px; background:var(--success); color:white; border:none; border-radius:8px;">儲存</button></div></div></div>
+
 <div id="mapModal" style="flex-direction:column;"><div id="map"></div><button onclick="closeMap()" style="padding:15px; width:100%; background:#444; color:white; border:none;">關閉軌跡</button></div>
 
 <div id="trainingOverlay">
-    <div id="statusTop" style="font-size:1.8rem; color:var(--success); font-weight:bold;">● 準備中</div>
-    <div id="phaseDetail" style="font-size:1.1rem; color:#ffeb3b; margin: 5px 0;">--</div>
+    <div id="statusTop" style="font-size:2rem; color:var(--success); font-weight:bold;">● 準備中</div>
+    <div id="phaseDetail" style="font-size:1.2rem; color:#ffeb3b; margin: 5px 0;">--</div>
     <div id="bigDistance" class="big-val">0.000</div>
     <div id="soundIndicator" style="color:var(--info); font-size:0.9rem;">等待 GPS...</div>
-    <div style="display:flex; width:100%; justify-content:space-around; margin: 15px 0; text-align:center;">
-        <div><div style="color:#888; font-size:0.8rem;">平均配速</div><div id="bigPaceAvg" style="font-size:1.6rem; font-family:monospace;">--:--</div></div>
-        <div><div style="color:#ffeb3b; font-size:0.8rem;">公里配速</div><div id="bigPaceCur" style="font-size:1.6rem; font-family:monospace; color:#ffeb3b;">--:--</div></div>
-        <div><div style="color:#888; font-size:0.8rem;">跑步時間</div><div id="bigElapsed" style="font-size:1.6rem; font-family:monospace;">00:00</div></div>
+    <div style="display:flex; width:100%; justify-content:space-around; margin: 10px 0; text-align:center;">
+        <div><div style="color:#888; font-size:0.8rem;">平均配速</div><div id="bigPaceAvg" style="font-size:1.8rem; font-family:monospace;">--:--</div></div>
+        <div><div style="color:#ffeb3b; font-size:0.8rem;">公里配速</div><div id="bigPaceCur" style="font-size:1.8rem; font-family:monospace; color:#ffeb3b;">--:--</div></div>
+        <div><div style="color:#888; font-size:0.8rem;">跑步時間</div><div id="bigElapsed" style="font-size:1.8rem; font-family:monospace;">00:00</div></div>
     </div>
-    <div class="bottom-bar"><button id="saveBtn" class="btn-action" style="width:100%; background:var(--danger);" onclick="stopAndSave()">■ 結束並儲存紀錄</button></div>
+    <div class="bottom-bar"><button class="btn-action btn-block" style="background:var(--danger);" onclick="stopAndSave()">■ 結束並儲存紀錄</button></div>
 </div>
 
-<div class="card" id="mainContainer">
-  <h2>跑步教練 V5.6.3</h2>
+<div class="card">
+  <h2 id="appTitle">跑步教練 V5.6.1</h2>
   <div id="intervalTable" style="display:none;">
       <table>
-        <thead><tr><th>階段</th><th>BPM</th><th>秒數</th><th>距離</th><th>跑速</th></tr></thead>
+        <thead><tr><th>階段</th><th>BPM</th><th>秒數</th><th>距離(m)</th><th>跑速</th></tr></thead>
         <tbody id="configRows"></tbody>
       </table>
-      <div style="display:flex; justify-content:space-between; margin:10px 0; font-size:13px;">
-        <span>循環：<input id="loopCount" type="number" oninput="uiUpdate()" style="width:45px;"> 組</span>
-        <span style="color:#666;">預計：<b id="totalPlanTime">0</b>分 / <b id="totalPlanDist">0</b>km</span>
-      </div>
-      <div style="text-align:right; font-size:14px; color:var(--primary); font-weight:bold;">
-        預計總跑速：<span id="totalPlanPace">--:--</span>
+      <div class="control-row" style="display:flex; justify-content:space-between; margin:10px 0;">
+        <span>循環：<input id="loopCount" type="number" oninput="uiUpdate()" style="width:40px;"> 組</span>
+        <span style="font-size:12px;">預計：<b id="totalPlanTime">0</b>分 / <b id="totalPlanDist">0</b>km</span>
       </div>
   </div>
-
   <div id="generalTable" style="display:none;">
       <div style="background:#f8f9fa; padding:10px; border-radius:10px;">
           <table style="table-layout: auto;">
@@ -89,49 +80,28 @@ input:checked + .slider:before { transform: translateX(20px); }
           </table>
       </div>
   </div>
-
-  <div class="switch-container">
-    <span style="font-size:14px; font-weight:bold; color:var(--danger);">里程停滯警示音</span>
-    <label class="switch">
-      <input type="checkbox" id="alarmSwitch" onchange="uiUpdate()">
-      <span class="slider"></span>
-    </label>
+  <div class="control-row" style="border-top:1px dashed #eee; margin-top:10px; display:flex; justify-content:space-between; align-items:center;">
+    <span>GPS門檻：<b id="baseThresDisp">0.32</b>m</span>
+    <div><button onclick="adjThres(-1)" style="padding:5px 12px;">－</button><button onclick="adjThres(1)" style="padding:5px 12px;">＋</button></div>
   </div>
-
-  <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px dashed #eee; padding-top:10px;">
-    <span style="font-size:13px;">GPS門檻：<b id="baseThresDisp">0.32</b>m</span>
-    <div><button onclick="adjThres(-1)" style="padding:5px 15px;">－</button><button onclick="adjThres(1)" style="padding:5px 15px;">＋</button></div>
-  </div>
-
-  <div style="display:flex; gap:10px; margin-top:15px;">
+  <div style="display:flex; gap:10px; margin-top:10px;">
       <button onclick="toggleStart(true)" class="btn-action" style="background:var(--primary); flex:1;">1 達標儲存</button>
       <button onclick="toggleStart(false)" class="btn-action" style="background:var(--info); flex:1;">2 達標續跑</button>
   </div>
-  <button onclick="resetMode()" style="width:100%; margin-top:15px; padding:10px; background:#eee; border:none; border-radius:8px; color:#555; font-size:13px;">↺ 切換訓練模式</button>
+  <button onclick="resetMode()" style="width:100%; margin-top:15px; padding:8px; background:#ddd; border:none; border-radius:8px; color:#333; font-size:13px; font-weight:bold;">↺ 切換訓練模式</button>
 </div>
 
 <div class="card"><strong>歷史紀錄</strong><div id="historyContainer"></div></div>
 
 <script>
-// 強制清除舊版本可能導致崩潰的錯誤資料
-(function cleanup(){
-    const lastVer = localStorage.getItem('app_version');
-    if(lastVer !== '5.6.3') {
-        // 如果版本不符，清除除了歷史紀錄以外的設定
-        const history = localStorage.getItem('run_history_v556');
-        localStorage.clear();
-        if(history) localStorage.setItem('run_history_v556', history);
-        localStorage.setItem('app_version', '5.6.3');
-    }
-})();
-
+// 使用與 5.5.6 相同的 KEY 以確保資料延續
 const CONFIG_KEY = 'run_config_v556';
 const HISTORY_KEY = 'run_history_v556';
 const PHASES = ["熱身", "間歇", "衝刺", "恢復", "舒緩"];
 let currentMode = null, isRunning = false, totalDist = 0, elapsedSec = 0;
 let audioCtx = null, timerId = null, watchId = null, trackPoints = [];
 let lastDistCheck = 0, distStallCount = 0, currentSoundType = true;
-let config = { bpm:[180,205,215,195,180], sec:[180,60,60,120,180], dist:[400,400,400,400,400], loops:8, threshold:0.32, genBPM:180, genSec:1200, genDist:3000, alarmOn:true };
+let config = { bpm:[180,205,215,195,180], sec:[180,60,60,120,180], dist:[400,400,400,400,400], loops:8, threshold:0.32, genBPM:180, genSec:1200, genDist:3000 };
 let startNote = { location: "偵測中", weather: "偵測中" };
 let lastKmDist = 0, lastKmSec = 0;
 
@@ -144,20 +114,15 @@ function selectMode(m) {
     uiUpdate();
 }
 
-function resetMode() {
+function resetMode() { 
     localStorage.removeItem('last_mode_v5');
-    document.getElementById('modeOverlay').style.display = 'flex';
+    document.getElementById('modeOverlay').style.display = 'flex'; 
 }
 
 function init() {
-    try {
-        const saved = localStorage.getItem(CONFIG_KEY);
-        if(saved) {
-            const parsed = JSON.parse(saved);
-            if(parsed && Array.isArray(parsed.bpm)) config = Object.assign(config, parsed);
-        }
-    } catch(e) { console.error("JSON Error"); }
-
+    const saved = localStorage.getItem(CONFIG_KEY);
+    if(saved) try { Object.assign(config, JSON.parse(saved)); } catch(e){}
+    
     let html = "";
     PHASES.forEach((p, i) => {
         html += `<tr><td><b>${p}</b></td><td><input type="number" id="bpm_${i}" oninput="uiUpdate()"></td><td><input type="number" id="sec_${i}" oninput="uiUpdate()"></td><td><input type="number" id="dist_${i}" oninput="uiUpdate()"></td><td class="pace-text" id="pace_${i}">--</td></tr>`;
@@ -167,51 +132,41 @@ function init() {
     fillFormFromConfig();
     const lastM = localStorage.getItem('last_mode_v5');
     if(lastM) { selectMode(lastM); } else { resetMode(); }
-    renderHistory();
+    uiUpdate(); renderHistory();
 }
 
 function fillFormFromConfig() {
-    try {
-        PHASES.forEach((p, i) => {
-            document.getElementById(`bpm_${i}`).value = config.bpm[i];
-            document.getElementById(`sec_${i}`).value = config.sec[i];
-            document.getElementById(`dist_${i}`).value = config.dist[i];
-        });
-        document.getElementById('loopCount').value = config.loops;
-        document.getElementById('genBPM').value = config.genBPM;
-        document.getElementById('genSec').value = config.genSec;
-        document.getElementById('genDist').value = config.genDist;
-        document.getElementById('baseThresDisp').innerText = config.threshold.toFixed(2);
-        document.getElementById('alarmSwitch').checked = config.alarmOn;
-        uiUpdate();
-    } catch(e) { console.error("Fill Error"); }
+    PHASES.forEach((p, i) => {
+        let b = document.getElementById(`bpm_${i}`), s = document.getElementById(`sec_${i}`), d = document.getElementById(`dist_${i}`);
+        if(b) b.value = config.bpm[i]; if(s) s.value = config.sec[i]; if(d) d.value = config.dist[i];
+    });
+    if(document.getElementById('loopCount')) document.getElementById('loopCount').value = config.loops;
+    if(document.getElementById('genBPM')) document.getElementById('genBPM').value = config.genBPM;
+    if(document.getElementById('genSec')) document.getElementById('genSec').value = config.genSec;
+    if(document.getElementById('genDist')) document.getElementById('genDist').value = config.genDist;
+    if(document.getElementById('baseThresDisp')) document.getElementById('baseThresDisp').innerText = config.threshold.toFixed(2);
 }
 
 function uiUpdate() {
-    try {
-        PHASES.forEach((p, i) => {
-            config.bpm[i] = +document.getElementById(`bpm_${i}`).value;
-            config.sec[i] = +document.getElementById(`sec_${i}`).value;
-            config.dist[i] = +document.getElementById(`dist_${i}`).value;
-            if(config.sec[i] > 0 && config.dist[i] > 0) {
-                document.getElementById(`pace_${i}`).innerText = formatTime(Math.floor(config.sec[i]/(config.dist[i]/1000)));
-            }
-        });
-        config.genBPM = +document.getElementById('genBPM').value;
-        config.genSec = +document.getElementById('genSec').value;
-        config.genDist = +document.getElementById('genDist').value;
-        config.loops = +document.getElementById('loopCount').value;
-        config.alarmOn = document.getElementById('alarmSwitch').checked;
-
-        let tT = config.sec[0] + ((config.sec[1]+config.sec[2]+config.sec[3])*config.loops) + config.sec[4];
-        let tD = config.dist[0] + ((config.dist[1]+config.dist[2]+config.dist[3])*config.loops) + config.dist[4];
-        document.getElementById('totalPlanTime').innerText = (tT/60).toFixed(1);
-        document.getElementById('totalPlanDist').innerText = (tD/1000).toFixed(2);
-        if(tD > 0) document.getElementById('totalPlanPace').innerText = formatTime(Math.floor(tT/(tD/1000)));
-        if(config.genDist > 0) document.getElementById('genPaceText').innerText = formatTime(Math.floor(config.genSec/(config.genDist/1000)));
-        
-        localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
-    } catch(e) {}
+    PHASES.forEach((p, i) => {
+        let b = document.getElementById(`bpm_${i}`), s = document.getElementById(`sec_${i}`), d = document.getElementById(`dist_${i}`);
+        if(b) config.bpm[i] = +b.value; if(s) config.sec[i] = +s.value; if(d) config.dist[i] = +d.value;
+        if(config.sec[i] > 0 && config.dist[i] > 0) {
+            let pEl = document.getElementById(`pace_${i}`);
+            if(pEl) pEl.innerText = formatTime(Math.floor(config.sec[i]/(config.dist[i]/1000)));
+        }
+    });
+    if(document.getElementById('genBPM')) config.genBPM = +document.getElementById('genBPM').value;
+    if(document.getElementById('genSec')) config.genSec = +document.getElementById('genSec').value;
+    if(document.getElementById('genDist')) config.genDist = +document.getElementById('genDist').value;
+    if(document.getElementById('loopCount')) config.loops = +document.getElementById('loopCount').value;
+    if(config.genSec > 0 && config.genDist > 0 && document.getElementById('genPaceText')) document.getElementById('genPaceText').innerText = formatTime(Math.floor(config.genSec/(config.genDist/1000)));
+    document.getElementById('baseThresDisp').innerText = config.threshold.toFixed(2);
+    let tT = config.sec[0] + ((config.sec[1]+config.sec[2]+config.sec[3])*config.loops) + config.sec[4];
+    let tD = config.dist[0] + ((config.dist[1]+config.dist[2]+config.dist[3])*config.loops) + config.dist[4];
+    document.getElementById('totalPlanTime').innerText = (tT/60).toFixed(1);
+    document.getElementById('totalPlanDist').innerText = (tD/1000).toFixed(2);
+    localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
 }
 
 async function toggleStart(isAuto) {
@@ -219,7 +174,6 @@ async function toggleStart(isAuto) {
     lastDistCheck = 0; distStallCount = 0; lastKmDist = 0; lastKmSec = 0;
     document.getElementById('trainingOverlay').style.display = 'flex';
     if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    
     timerId = setInterval(() => {
         elapsedSec++;
         document.getElementById('bigElapsed').innerText = formatTime(elapsedSec);
@@ -228,11 +182,8 @@ async function toggleStart(isAuto) {
             let curDiffDist = (totalDist - lastKmDist) / 1000, curDiffSec = elapsedSec - lastKmSec;
             if(curDiffDist > 0.005) document.getElementById('bigPaceCur').innerText = formatTime(Math.floor(curDiffSec/curDiffDist));
         }
-        if (config.alarmOn && totalDist <= lastDistCheck && elapsedSec > 15) { 
-            distStallCount++; if (distStallCount >= 5) { triggerAlarm(); distStallCount = 0; } 
-        } else { lastDistCheck = totalDist; distStallCount = 0; }
+        if (totalDist <= lastDistCheck && elapsedSec > 10) { distStallCount++; if (distStallCount >= 5) { triggerAlarm(); distStallCount = 0; } } else { lastDistCheck = totalDist; distStallCount = 0; }
     }, 1000);
-
     startGPS();
     if(currentMode === 'interval') {
         await runPhase("熱身", config.sec[0], config.bpm[0]);
@@ -253,7 +204,7 @@ async function toggleStart(isAuto) {
             if(isAuto && totalDist >= config.genDist) break;
         }
     }
-    if(isRunning && isAuto) stopAndSave();
+    if(isRunning) { if(isAuto) { stopAndSave(); } else { document.getElementById('statusTop').innerText = "● 續跑中"; let lastBPM = (currentMode === 'interval') ? config.bpm[4] : config.genBPM; while(isRunning) { await playBeep(lastBPM); } } }
 }
 
 async function runPhase(label, sec, bpm) {
@@ -261,60 +212,49 @@ async function runPhase(label, sec, bpm) {
     document.getElementById('statusTop').innerText = "● " + label;
     currentSoundType = !currentSoundType;
     let end = Date.now() + sec * 1000;
-    while(Date.now() < end && isRunning) { 
-        let rem = Math.max(0, Math.round((end - Date.now())/1000)); 
-        document.getElementById('phaseDetail').innerText = `節拍:${bpm} | 剩:${rem}s`; 
-        await playBeep(bpm); 
-    }
+    while(Date.now() < end && isRunning) { let rem = Math.max(0, Math.round((end - Date.now())/1000)); document.getElementById('phaseDetail').innerText = `節拍:${bpm} | 剩:${rem}s`; await playBeep(bpm); }
 }
 
 async function playBeep(bpm) {
     if(!isRunning) return;
-    try {
-        const o = audioCtx.createOscillator(), g = audioCtx.createGain(); o.connect(g); g.connect(audioCtx.destination);
-        let km = Math.floor(totalDist / 1000); if (km > (lastKmDist/1000)) { lastKmDist = km * 1000; lastKmSec = elapsedSec; }
-        let isHigh = (km % 2 === 0) ? currentSoundType : !currentSoundType;
-        o.type = 'square'; o.frequency.setValueAtTime(isHigh ? 1150 : 850, audioCtx.currentTime);
-        g.gain.setValueAtTime(isHigh ? 0.3 : 0.5, audioCtx.currentTime); g.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
-        o.start(); o.stop(audioCtx.currentTime + 0.1);
-        document.getElementById('soundIndicator').innerText = `第 ${km+1}k | ${isHigh?'高音':'低音'} | 里程:${(totalDist/1000).toFixed(2)}k`;
-    } catch(e) {}
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain(); o.connect(g); g.connect(audioCtx.destination);
+    let km = Math.floor(totalDist / 1000); if (km > (lastKmDist/1000)) { lastKmDist = km * 1000; lastKmSec = elapsedSec; }
+    let isHigh = (km % 2 === 0) ? currentSoundType : !currentSoundType;
+    o.type = 'square'; o.frequency.setValueAtTime(isHigh ? 1150 : 850, audioCtx.currentTime);
+    g.gain.setValueAtTime(isHigh ? 0.3 : 0.5, audioCtx.currentTime); g.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+    o.start(); o.stop(audioCtx.currentTime + 0.1);
+    document.getElementById('soundIndicator').innerText = `第 ${km+1}k | ${isHigh?'高音':'低音'} | 里程:${(totalDist/1000).toFixed(2)}k`;
     await new Promise(r => setTimeout(r, 60000/bpm));
 }
 
-function triggerAlarm() { if (navigator.vibrate) navigator.vibrate([600, 200, 600]); try { const o = audioCtx.createOscillator(), g = audioCtx.createGain(); o.connect(g); g.connect(audioCtx.destination); o.frequency.value = 1600; o.type = 'sawtooth'; g.gain.value = 0.5; o.start(); o.stop(audioCtx.currentTime + 0.6); } catch(e){} }
+function triggerAlarm() { if (navigator.vibrate) navigator.vibrate([600, 200, 600]); const o = audioCtx.createOscillator(), g = audioCtx.createGain(); o.connect(g); g.connect(audioCtx.destination); o.frequency.value = 1600; o.type = 'sawtooth'; g.gain.value = 0.5; o.start(); o.stop(audioCtx.currentTime + 0.6); }
 
 function startGPS() {
     watchId = navigator.geolocation.watchPosition(p => {
-        try {
-            const { latitude: lat, longitude: lon, accuracy } = p.coords;
-            if(accuracy < 60) {
-                if(trackPoints.length === 0) {
-                    fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`).then(res=>res.json()).then(d=>startNote.location=d.display_name.split(',')[0]).catch(e=>{});
-                    fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`).then(res=>res.json()).then(d=>startNote.weather=`${d.current_weather.temperature}°C`).catch(e=>{});
-                } else {
-                    let last = trackPoints[trackPoints.length-1], d = haversine(last.lat, last.lon, lat, lon);
-                    if(d > config.threshold && d < 50) { totalDist += d; document.getElementById('bigDistance').innerText = (totalDist/1000).toFixed(3); }
-                }
-                trackPoints.push({lat, lon, time: new Date().toISOString()});
+        const { latitude: lat, longitude: lon, accuracy } = p.coords;
+        if(accuracy < 60) {
+            if(trackPoints.length === 0) {
+                fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`).then(res=>res.json()).then(d=>startNote.location=d.display_name.split(',')[0]).catch(e=>{});
+                fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`).then(res=>res.json()).then(d=>startNote.weather=`${d.current_weather.temperature}°C`).catch(e=>{});
+            } else {
+                let last = trackPoints[trackPoints.length-1], d = haversine(last.lat, last.lon, lat, lon);
+                if(d > config.threshold && d < 50) { totalDist += d; document.getElementById('bigDistance').innerText = (totalDist/1000).toFixed(3); }
             }
-        } catch(e) {}
+            trackPoints.push({lat, lon, time: new Date().toISOString()});
+        }
     }, null, {enableHighAccuracy:true});
 }
 
 function stopAndSave() {
-    isRunning = false; clearInterval(timerId); if(watchId) navigator.geolocation.clearWatch(watchId);
-    document.getElementById('saveBtn').innerText = "正在儲存..."; document.getElementById('saveBtn').disabled = true;
-    setTimeout(() => {
-        try {
-            const recs = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
-            recs.unshift({ id: Date.now(), date: new Date().toLocaleString(), dist: (totalDist/1000).toFixed(3), time: formatTime(elapsedSec), points: trackPoints, mode: currentMode, note: `📍地點：${startNote.location}\n🌡氣候：${startNote.weather}\n⚙️門檻：${config.threshold.toFixed(2)}m` });
-            localStorage.setItem(HISTORY_KEY, JSON.stringify(recs));
-        } catch(e) {}
-        document.getElementById('trainingOverlay').style.display = 'none';
-        document.getElementById('saveBtn').innerText = "■ 結束並儲存紀錄"; document.getElementById('saveBtn').disabled = false;
-        renderHistory();
-    }, 500);
+    isRunning = false; clearInterval(timerId); timerId = null; navigator.geolocation.clearWatch(watchId);
+    if(totalDist > 0) {
+        const recs = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+        // 使用普通文字備註，避免 Base64 導致的中文問題
+        recs.unshift({ id: Date.now(), date: new Date().toLocaleString(), dist: (totalDist/1000).toFixed(3), time: formatTime(elapsedSec), points: trackPoints, mode: currentMode, note: `📍地點：${startNote.location}\n🌡氣候：${startNote.weather}\n⚙️門檻：${config.threshold.toFixed(2)}m` });
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(recs));
+    }
+    document.getElementById('trainingOverlay').style.display = 'none';
+    renderHistory();
 }
 
 function renderHistory() {
@@ -323,7 +263,7 @@ function renderHistory() {
         document.getElementById('historyContainer').innerHTML = recs.map(r => `
             <div class="history-card">
                 <b>🏃 ${r.dist} km | ${r.time}</b> (${r.date})
-                <div style="font-size:11px; color:#666; margin-top:5px; white-space:pre-wrap;">${r.note || '無'}</div>
+                <div style="font-size:11px; color:#666; margin:5px 0; white-space:pre-wrap;">${r.note || '無'}</div>
                 <div class="history-btns">
                     <button class="btn-sm" style="background:var(--info);" onclick="viewTrack(${r.id})">軌跡</button>
                     <button class="btn-sm" style="background:var(--note);" onclick="editNote(${r.id})">備註</button>
