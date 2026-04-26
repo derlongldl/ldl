@@ -2,79 +2,112 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>跑步教練 V5.8 完整強化版</title>
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<title>跑步教練 V5.9 間歇強化版</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-:root { --primary:#ff6a00; --danger:#e74c3c; --success:#2ecc71; }
-body{margin:0;font-family:sans-serif;background:#000;color:#fff;}
-#trainingOverlay{display:flex;flex-direction:column;justify-content:center;align-items:center;height:100vh;}
-.big{font-size:5rem;font-weight:bold;color:var(--primary);} 
-.bottom-bar{position:absolute;bottom:30px;width:90%;}
-button{border:none;border-radius:12px;padding:15px;font-size:1.1rem;}
-#mapModal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:#000;z-index:9999;}
-#map{height:90%;}
+body{margin:0;font-family:sans-serif;background:#000;color:#fff}
+#app{display:flex;flex-direction:column;justify-content:center;align-items:center;height:100vh}
+.big{font-size:4rem;color:#ff6a00}
+.bottom{position:absolute;bottom:20px;width:90%}
+button{padding:12px;border:none;border-radius:10px;font-size:1rem}
 </style>
 </head>
 <body>
 
-<div id="trainingOverlay">
-<div id="status">● 一般練跑</div>
-<div id="distance" class="big">0.000</div>
-<div id="pace">--:--</div>
+<div id="app">
+<div id="phase">準備中</div>
+<div id="dist" class="big">0.000</div>
 <div id="time">00:00</div>
+<div id="info">--</div>
 
-<div class="bottom-bar">
+<div class="bottom">
+<select id="modeSel">
+<option value="general">一般</option>
+<option value="interval">間歇</option>
+</select>
 
-<div style="display:flex;justify-content:center;gap:10px;margin-bottom:10px;">
-<input type="range" min="120" max="220" value="180" id="bpmSlider" oninput="setBPM(this.value)">
-<div id="bpm">180</div>
+<button id="stopBtn" style="background:red;width:100%">長按結束</button>
 </div>
-
-<button id="stopBtn" style="background:var(--danger);width:100%;">長按結束</button>
-
-</div>
-</div>
-
-<div id="mapModal">
-<div id="map"></div>
-<button onclick="closeMap()" style="width:100%;">關閉</button>
 </div>
 
 <script>
-let isRunning=true,bpm=180,elapsed=0,totalDist=0;
-let audioCtx=null,timer=null,watchId=null,lastPos=null;
-let pressTimer=null,points=[];
+let isRunning=true,mode='general';
+let elapsed=0,totalDist=0;
+let timer,watchId,lastPos=null,points=[];
+let audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+
+// 間歇設定（可自行改）
+const intervalPlan=[
+ {name:'熱身',sec:120,bpm:170},
+ {name:'衝刺',sec:60,bpm:200},
+ {name:'恢復',sec:90,bpm:160}
+];
+let loopCount=3;
+let stateIndex=0,loopIndex=0,phaseEnd=0;
 
 init();
 
 function init(){
- audioCtx=new (window.AudioContext||window.webkitAudioContext)();
- timer=setInterval(updateTime,1000);
+ timer=setInterval(tick,1000);
  startGPS();
+ startPhase();
  loop();
 }
 
-function updateTime(){
+function tick(){
  elapsed++;
  document.getElementById('time').innerText=format(elapsed);
- if(totalDist>0){
-  let pace=Math.floor(elapsed/(totalDist/1000));
-  document.getElementById('pace').innerText=format(pace);
+ updatePhase();
+}
+
+function startPhase(){
+ if(mode==='interval'){
+  stateIndex=0;loopIndex=0;
+  setNextPhase();
+ } else {
+  document.getElementById('phase').innerText='一般跑';
+ }
+}
+
+function setNextPhase(){
+ if(loopIndex>=loopCount){
+  stop();return;
+ }
+ let phase=intervalPlan[stateIndex];
+ document.getElementById('phase').innerText=`${phase.name} (${loopIndex+1}/${loopCount})`;
+ document.getElementById('info').innerText=`BPM ${phase.bpm}`;
+ phaseEnd=Date.now()+phase.sec*1000;
+}
+
+function updatePhase(){
+ if(mode!=='interval') return;
+ if(Date.now()>=phaseEnd){
+  stateIndex++;
+  if(stateIndex>=intervalPlan.length){
+   stateIndex=0;loopIndex++;
+  }
+  setNextPhase();
  }
 }
 
 async function loop(){
- while(isRunning){await beep();}
+ while(isRunning){
+  let bpm=getCurrentBPM();
+  await beep(bpm);
+ }
 }
 
-async function beep(){
+function getCurrentBPM(){
+ if(mode==='interval') return intervalPlan[stateIndex].bpm;
+ return 180;
+}
+
+async function beep(bpm){
  if(!isRunning) return;
  const o=audioCtx.createOscillator();
  const g=audioCtx.createGain();
  o.connect(g);g.connect(audioCtx.destination);
- o.frequency.value=1000;
+ o.frequency.value=(mode==='interval')?1200:900;
  g.gain.value=0.3;
  o.start();o.stop(audioCtx.currentTime+0.1);
  await sleep(60000/bpm);
@@ -89,12 +122,12 @@ function sleep(ms){
 
 function startGPS(){
  watchId=navigator.geolocation.watchPosition(p=>{
-  const {latitude,longitude}=p.coords;
+  let {latitude,longitude}=p.coords;
   if(lastPos){
    let d=haversine(lastPos.lat,lastPos.lon,latitude,longitude);
    if(d<50){
     totalDist+=d;
-    document.getElementById('distance').innerText=(totalDist/1000).toFixed(3);
+    document.getElementById('dist').innerText=(totalDist/1000).toFixed(3);
    }
   }
   lastPos={lat:latitude,lon:longitude};
@@ -106,66 +139,28 @@ function stop(){
  isRunning=false;
  clearInterval(timer);
  navigator.geolocation.clearWatch(watchId);
- if(audioCtx){audioCtx.close();audioCtx=null;}
- save();
- alert('已儲存');
+ audioCtx.close();
+ alert('完成訓練');
 }
 
-function save(){
- let rec={time:format(elapsed),dist:(totalDist/1000).toFixed(3),pts:points,date:new Date().toLocaleString()};
- let arr=JSON.parse(localStorage.getItem('run_v58')||"[]");
- arr.unshift(rec);
- localStorage.setItem('run_v58',JSON.stringify(arr));
-}
-
-function setBPM(v){
- bpm=+v;
- document.getElementById('bpm').innerText=bpm;
-}
-
-function format(s){
- return Math.floor(s/60).toString().padStart(2,'0')+":"+(s%60).toString().padStart(2,'0');
-}
-
-function haversine(lat1,lon1,lat2,lon2){
+function format(s){return Math.floor(s/60).toString().padStart(2,'0')+":"+(s%60).toString().padStart(2,'0');}
+function haversine(a,b,c,d){
  const R=6371000;
- const dLat=(lat2-lat1)*Math.PI/180;
- const dLon=(lon2-lon1)*Math.PI/180;
- const a=Math.sin(dLat/2)**2+
- Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*
- Math.sin(dLon/2)**2;
- return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+ const dLat=(c-a)*Math.PI/180;
+ const dLon=(d-b)*Math.PI/180;
+ const x=Math.sin(dLat/2)**2+Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(dLon/2)**2;
+ return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
 }
+
+// 模式切換
+const sel=document.getElementById('modeSel');
+sel.onchange=()=>{mode=sel.value;startPhase();}
 
 // 長按
+let pressTimer;
 const btn=document.getElementById('stopBtn');
-btn.addEventListener('mousedown',startPress);
-btn.addEventListener('touchstart',startPress);
-btn.addEventListener('mouseup',cancelPress);
-btn.addEventListener('mouseleave',cancelPress);
-btn.addEventListener('touchend',cancelPress);
-
-function startPress(){
- btn.style.opacity=0.5;
- pressTimer=setTimeout(()=>{stop();},1200);
-}
-function cancelPress(){
- btn.style.opacity=1;
- clearTimeout(pressTimer);
-}
-
-// 地圖
-let map,poly;
-function showMap(){
- document.getElementById('mapModal').style.display='block';
- setTimeout(()=>{
-  map=L.map('map').setView([points[0].lat,points[0].lon],16);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-  poly=L.polyline(points.map(p=>[p.lat,p.lon])).addTo(map);
-  map.fitBounds(poly.getBounds());
- },300);
-}
-function closeMap(){document.getElementById('mapModal').style.display='none';}
+btn.onmousedown=btn.ontouchstart=()=>{pressTimer=setTimeout(stop,1200);btn.style.opacity=0.5};
+btn.onmouseup=btn.onmouseleave=btn.ontouchend=()=>{clearTimeout(pressTimer);btn.style.opacity=1};
 
 </script>
 
