@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>跑步教練 V5.7.0 - 穩定優化版</title>
+<title>跑步教練 V5.7.1 - 核心穩定優化版</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -31,7 +31,7 @@ input { width: 90%; padding: 8px 0; text-align: center; border: 1px solid #ccc; 
 .history-btns { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
 .btn-sm { flex: 1; min-width: 55px; padding: 8px 2px; font-size: 11px; border-radius: 6px; border: none; color: white; font-weight: bold; }
 
-/* 新增：長按與 BPM 控制樣式 */
+/* 長按與 BPM 控制樣式 */
 .bpm-control { display: flex; align-items: center; justify-content: center; gap: 15px; margin-bottom: 20px; background: rgba(255,255,255,0.1); padding: 10px; border-radius: 10px; }
 .btn-circle { width: 44px; height: 44px; border-radius: 50%; border: 2px solid #fff; background: transparent; color: #fff; font-size: 1.5rem; cursor: pointer; }
 .hold-btn-container { position: relative; width: 100%; height: 60px; overflow: hidden; border-radius: 15px; }
@@ -71,8 +71,8 @@ input { width: 90%; padding: 8px 0; text-align: center; border: 1px solid #ccc; 
         <div class="hold-btn-container">
             <div id="holdProgress"></div>
             <button id="btnStop" class="btn-action btn-block" style="background:var(--danger); position:relative; z-index:1;" 
-                onmousedown="startHold(event)" onmouseup="endHold()" onmouseleave="endHold()"
-                ontouchstart="startHold(event)" ontouchend="endHold()">
+                onmousedown="startHold(event)" onmouseup="endHold(event)" onmouseleave="endHold(event)"
+                ontouchstart="startHold(event)" ontouchend="endHold(event)" ontouchcancel="endHold(event)">
                 長按 1.5 秒結束並儲存
             </button>
         </div>
@@ -80,7 +80,7 @@ input { width: 90%; padding: 8px 0; text-align: center; border: 1px solid #ccc; 
 </div>
 
 <div class="card">
-  <h2 id="appTitle">跑步教練 V5.7.0</h2>
+  <h2 id="appTitle">跑步教練 V5.7.1</h2>
   <div id="intervalTable" style="display:none;">
       <table>
         <thead><tr><th>階段</th><th>BPM</th><th>秒數</th><th>距離(m)</th><th>跑速</th></tr></thead>
@@ -196,13 +196,17 @@ function uiUpdate() {
     localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
 }
 
+// ==================== 優化後的控制核心（防卡死計時器架構） ====================
 async function toggleStart(isAuto) {
+    if (isRunning) return; 
     isRunning = true; totalDist = 0; elapsedSec = 0; trackPoints = []; 
     lastDistCheck = 0; distStallCount = 0; lastKmDist = 0; lastKmSec = 0;
     document.getElementById('trainingOverlay').style.display = 'flex';
     if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     
+    // 獨立的數據與安全檢查計時器（每秒觸發）
     timerId = setInterval(() => {
+        if (!isRunning) return;
         elapsedSec++;
         document.getElementById('bigElapsed').innerText = formatTime(elapsedSec);
         if(totalDist > 5) {
@@ -218,48 +222,86 @@ async function toggleStart(isAuto) {
 
     startGPS();
 
-    if(currentMode === 'interval') {
-        await runPhase("熱身", config.sec[0], config.bpm[0]);
-        for(let j=0; j<config.loops; j++) {
-            if(!isRunning) break;
-            await runPhase(`間歇(${j+1}/${config.loops})`, config.sec[1], config.bpm[1]);
-            await runPhase(`衝刺(${j+1}/${config.loops})`, config.sec[2], config.bpm[2]);
-            await runPhase(`恢復(${j+1}/${config.loops})`, config.sec[3], config.bpm[3]);
+    // 啟動獨立的音效驅動核心（絕不在主執行緒中造成 Busy Waiting 死循環）
+    runBeepLoop();
+
+    try {
+        if(currentMode === 'interval') {
+            await runPhase("熱身", config.sec[0], config.bpm[0]);
+            for(let j=0; j<config.loops; j++) {
+                if(!isRunning) break;
+                await runPhase(`間歇(${j+1}/${config.loops})`, config.sec[1], config.bpm[1]);
+                await runPhase(`衝刺(${j+1}/${config.loops})`, config.sec[2], config.bpm[2]);
+                await runPhase(`恢復(${j+1}/${config.loops})`, config.sec[3], config.bpm[3]);
+            }
+            if(isRunning) await runPhase("舒緩", config.sec[4], config.bpm[4]);
+            if(isRunning) stopAndSave(); 
+        } else {
+            // 一般練跑模式：採用定時回傳主權的異步架構
+            document.getElementById('statusTop').innerText = "● 一般練跑";
+            currentRunningBPM = config.genBPM;
+            document.getElementById('liveBPM').innerText = currentRunningBPM;
+            
+            let targetSec = config.genSec;
+            while(isRunning) {
+                if (targetSec > 0) {
+                    targetSec--;
+                    document.getElementById('phaseDetail').innerText = isAuto ? `目標:${config.genDist}m | 剩:${targetSec}s` : `目標:${config.genDist}m | 續跑中`;
+                    if (isAuto && totalDist >= config.genDist) {
+                        stopAndSave();
+                        break;
+                    }
+                } else {
+                    if (isAuto) {
+                        stopAndSave();
+                        break;
+                    } else {
+                        document.getElementById('statusTop').innerText = "● 續跑中";
+                        document.getElementById('phaseDetail').innerText = `目標:${config.genDist}m | 續跑中`;
+                    }
+                }
+                await new Promise(r => setTimeout(r, 1000)); // 精準且安全的 1 秒非阻塞中斷點
+            }
         }
-        if(isRunning) await runPhase("舒緩", config.sec[4], config.bpm[4]);
-    } else {
-        document.getElementById('statusTop').innerText = "● 一般練跑";
-        currentRunningBPM = config.genBPM;
-        document.getElementById('liveBPM').innerText = currentRunningBPM;
-        let endTime = Date.now() + config.genSec * 1000;
-        while(isRunning && (Date.now() < endTime || !isAuto)) {
-            let rem = Math.max(0, Math.round((endTime - Date.now())/1000));
-            document.getElementById('phaseDetail').innerText = isAuto ? `目標:${config.genDist}m | 剩:${rem}s` : `目標:${config.genDist}m | 續跑中`;
-            await playBeepTick();
-            if(isAuto && totalDist >= config.genDist) break;
-        }
-    }
-    if(isRunning) { 
-        if(isAuto) { stopAndSave(); } 
-        else { 
-            document.getElementById('statusTop').innerText = "● 續跑中"; 
-            while(isRunning) { await playBeepTick(); } 
-        } 
+    } catch (err) {
+        console.error("訓練流程異常:", err);
     }
 }
 
-async function runPhase(label, sec, bpm) {
-    if(!isRunning) return;
-    document.getElementById('statusTop').innerText = "● " + label;
-    currentRunningBPM = bpm;
-    document.getElementById('liveBPM').innerText = currentRunningBPM;
-    currentSoundType = !currentSoundType;
-    let end = Date.now() + sec * 1000;
-    while(Date.now() < end && isRunning) { 
-        let rem = Math.max(0, Math.round((end - Date.now())/1000)); 
-        document.getElementById('phaseDetail').innerText = `節拍:${currentRunningBPM} | 剩:${rem}s`; 
-        await playBeepTick(); 
+// 獨立音效驅動程序
+async function runBeepLoop() {
+    while(isRunning) {
+        let startTime = Date.now();
+        await playBeepTick();
+        let execTime = Date.now() - startTime;
+        let delay = Math.max(10, (60000 / currentRunningBPM) - execTime);
+        await new Promise(r => setTimeout(r, delay));
     }
+}
+
+// 訓練階段封裝（改用計時器回調驅動，全面撤換 while 阻塞）
+function runPhase(label, sec, bpm) {
+    return new Promise((resolve) => {
+        if(!isRunning) return resolve();
+        document.getElementById('statusTop').innerText = "● " + label;
+        currentRunningBPM = bpm;
+        document.getElementById('liveBPM').innerText = currentRunningBPM;
+        currentSoundType = !currentSoundType;
+        
+        let remSec = sec;
+        let phaseTimer = setInterval(() => {
+            if (!isRunning) {
+                clearInterval(phaseTimer);
+                return resolve();
+            }
+            remSec--;
+            document.getElementById('phaseDetail').innerText = `節拍:${currentRunningBPM} | 剩:${remSec}s`;
+            if (remSec <= 0) {
+                clearInterval(phaseTimer);
+                resolve();
+            }
+        }, 1000);
+    });
 }
 
 async function playBeepTick() {
@@ -278,7 +320,6 @@ async function playBeepTick() {
         o.onended = () => { o.disconnect(); g.disconnect(); };
         document.getElementById('soundIndicator').innerText = `第 ${km+1}k | ${isHigh?'高音':'低音'} | 里程:${(totalDist/1000).toFixed(3)}k`;
     } catch(e) {}
-    await new Promise(r => setTimeout(r, 60000/currentRunningBPM));
 }
 
 function adjLiveBPM(v) { currentRunningBPM += v; document.getElementById('liveBPM').innerText = currentRunningBPM; }
@@ -297,17 +338,38 @@ function triggerAlarm() {
     } catch(e) {}
 }
 
+// ==================== 優化後的長按結束邏輯（防汗水誤觸、防滑動干擾） ====================
 function startHold(e) {
-    if(e) e.preventDefault();
+    if(e) {
+        e.preventDefault(); // 🛑 核心：完全阻斷手機網頁捲動與多重觸發
+        if (e.touches && e.touches.length > 1) return; 
+    }
+    clearInterval(holdTimer); 
     holdPercent = 0;
     document.getElementById('holdProgress').style.width = '0%';
+    
     holdTimer = setInterval(() => {
+        if (!isRunning) { 
+            clearInterval(holdTimer);
+            return;
+        }
         holdPercent += 4; 
         document.getElementById('holdProgress').style.width = holdPercent + '%';
-        if(holdPercent >= 100) { clearInterval(holdTimer); stopAndSave(); }
+        if(holdPercent >= 100) { 
+            clearInterval(holdTimer); 
+            holdPercent = 0;
+            document.getElementById('holdProgress').style.width = '0%';
+            stopAndSave(); 
+        }
     }, 60); 
 }
-function endHold() { clearInterval(holdTimer); holdPercent = 0; document.getElementById('holdProgress').style.width = '0%'; }
+
+function endHold(e) { 
+    if(e) e.preventDefault();
+    clearInterval(holdTimer); 
+    holdPercent = 0; 
+    document.getElementById('holdProgress').style.width = '0%'; 
+}
 
 function startGPS() {
     watchId = navigator.geolocation.watchPosition(p => {
@@ -326,7 +388,10 @@ function startGPS() {
 }
 
 function stopAndSave() {
-    isRunning = false; clearInterval(timerId); timerId = null; navigator.geolocation.clearWatch(watchId);
+    isRunning = false; 
+    clearInterval(timerId); 
+    timerId = null; 
+    navigator.geolocation.clearWatch(watchId);
     if(totalDist > 0) {
         const recs = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
         recs.unshift({ id: Date.now(), date: new Date().toLocaleString(), dist: (totalDist/1000).toFixed(3), time: formatTime(elapsedSec), points: trackPoints, mode: currentMode, note: `📍地點：${startNote.location}\n🌡氣候：${startNote.weather}\n⚙️門檻：${config.threshold.toFixed(2)}m` });
