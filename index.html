@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>跑步教練 V5.7.1 - 核心穩定優化版</title>
+<title>跑步教練 V5.7.2 - 後台強固儲存版</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -80,7 +80,7 @@ input { width: 90%; padding: 8px 0; text-align: center; border: 1px solid #ccc; 
 </div>
 
 <div class="card">
-  <h2 id="appTitle">跑步教練 V5.7.1</h2>
+  <h2 id="appTitle">跑步教練 V5.7.2</h2>
   <div id="intervalTable" style="display:none;">
       <table>
         <thead><tr><th>階段</th><th>BPM</th><th>秒數</th><th>距離(m)</th><th>跑速</th></tr></thead>
@@ -196,7 +196,6 @@ function uiUpdate() {
     localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
 }
 
-// ==================== 優化後的控制核心（防卡死計時器架構） ====================
 async function toggleStart(isAuto) {
     if (isRunning) return; 
     isRunning = true; totalDist = 0; elapsedSec = 0; trackPoints = []; 
@@ -204,7 +203,6 @@ async function toggleStart(isAuto) {
     document.getElementById('trainingOverlay').style.display = 'flex';
     if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     
-    // 獨立的數據與安全檢查計時器（每秒觸發）
     timerId = setInterval(() => {
         if (!isRunning) return;
         elapsedSec++;
@@ -221,8 +219,6 @@ async function toggleStart(isAuto) {
     }, 1000);
 
     startGPS();
-
-    // 啟動獨立的音效驅動核心（絕不在主執行緒中造成 Busy Waiting 死循環）
     runBeepLoop();
 
     try {
@@ -237,7 +233,6 @@ async function toggleStart(isAuto) {
             if(isRunning) await runPhase("舒緩", config.sec[4], config.bpm[4]);
             if(isRunning) stopAndSave(); 
         } else {
-            // 一般練跑模式：採用定時回傳主權的異步架構
             document.getElementById('statusTop').innerText = "● 一般練跑";
             currentRunningBPM = config.genBPM;
             document.getElementById('liveBPM').innerText = currentRunningBPM;
@@ -260,7 +255,7 @@ async function toggleStart(isAuto) {
                         document.getElementById('phaseDetail').innerText = `目標:${config.genDist}m | 續跑中`;
                     }
                 }
-                await new Promise(r => setTimeout(r, 1000)); // 精準且安全的 1 秒非阻塞中斷點
+                await new Promise(r => setTimeout(r, 1000)); 
             }
         }
     } catch (err) {
@@ -268,7 +263,6 @@ async function toggleStart(isAuto) {
     }
 }
 
-// 獨立音效驅動程序
 async function runBeepLoop() {
     while(isRunning) {
         let startTime = Date.now();
@@ -279,7 +273,6 @@ async function runBeepLoop() {
     }
 }
 
-// 訓練階段封裝（改用計時器回調驅動，全面撤換 while 阻塞）
 function runPhase(label, sec, bpm) {
     return new Promise((resolve) => {
         if(!isRunning) return resolve();
@@ -338,10 +331,9 @@ function triggerAlarm() {
     } catch(e) {}
 }
 
-// ==================== 優化後的長按結束邏輯（防汗水誤觸、防滑動干擾） ====================
 function startHold(e) {
     if(e) {
-        e.preventDefault(); // 🛑 核心：完全阻斷手機網頁捲動與多重觸發
+        e.preventDefault(); 
         if (e.touches && e.touches.length > 1) return; 
     }
     clearInterval(holdTimer); 
@@ -387,15 +379,35 @@ function startGPS() {
     }, null, {enableHighAccuracy:true});
 }
 
+// 🛑 V5.7.2 核心安全儲存優化
 function stopAndSave() {
+    if (!isRunning) return;
     isRunning = false; 
     clearInterval(timerId); 
     timerId = null; 
     navigator.geolocation.clearWatch(watchId);
+    
     if(totalDist > 0) {
-        const recs = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
-        recs.unshift({ id: Date.now(), date: new Date().toLocaleString(), dist: (totalDist/1000).toFixed(3), time: formatTime(elapsedSec), points: trackPoints, mode: currentMode, note: `📍地點：${startNote.location}\n🌡氣候：${startNote.weather}\n⚙️門檻：${config.threshold.toFixed(2)}m` });
-        localStorage.setItem(HISTORY_KEY, JSON.stringify(recs));
+        try {
+            const recs = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+            const newRecord = { 
+                id: Date.now(), 
+                date: new Date().toLocaleString(), 
+                dist: (totalDist/1000).toFixed(3), 
+                time: formatTime(elapsedSec), 
+                points: trackPoints, 
+                mode: currentMode, 
+                note: `📍地點：${startNote.location}\n🌡氣候：${startNote.weather}\n⚙️門檻：${config.threshold.toFixed(2)}m` 
+            };
+            recs.unshift(newRecord);
+            localStorage.setItem(HISTORY_KEY, JSON.stringify(recs));
+            
+            // 強制彈窗提醒，確保用戶知道手機已完成寫入硬碟
+            alert(`🎉 訓練達標！紀錄已成功儲存：${(totalDist/1000).toFixed(3)} km`);
+        } catch (e) {
+            alert("⚠️ 儲存失敗！空間可能不足或遭到系統封鎖：" + e.message);
+            console.error("LocalStorage 寫入異常:", e);
+        }
     }
     document.getElementById('trainingOverlay').style.display = 'none';
     renderHistory();
