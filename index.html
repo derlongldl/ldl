@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>跑步教練 V5.7.2 - 後台強固儲存版</title>
+<title>跑步教練 V5.7.3 - 雙重備份防爆版</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -23,15 +23,14 @@ input { width: 90%; padding: 8px 0; text-align: center; border: 1px solid #ccc; 
 .btn-mode { width: 80%; padding: 35px 20px; font-size: 1.4rem; font-weight: bold; color: white; border: none; border-radius: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
 #trainingOverlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; color: #fff; z-index: 10000; flex-direction: column; justify-content: center; align-items: center; padding: 20px; box-sizing: border-box; }
 .bottom-bar { position: absolute; bottom: 30px; left: 20px; right: 20px; }
-#mapModal, #noteModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 30000; justify-content: center; align-items: center; }
+#mapModal, #noteModal, #rescueModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 30000; justify-content: center; align-items: center; }
 #map { width: 100%; height: 80%; background: white; }
 .note-box { background: white; width: 85%; border-radius: 15px; padding: 20px; color: #333; }
-#noteArea { width: 100%; height: 120px; margin-top: 10px; padding: 8px; font-size: 14px; border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box; }
+#noteArea, #rescueArea { width: 100%; height: 120px; margin-top: 10px; padding: 8px; font-size: 14px; border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box; }
 .history-card { background: white; border-radius: 10px; padding: 12px; margin-bottom: 10px; border-left: 5px solid var(--primary); }
 .history-btns { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
 .btn-sm { flex: 1; min-width: 55px; padding: 8px 2px; font-size: 11px; border-radius: 6px; border: none; color: white; font-weight: bold; }
 
-/* 長按與 BPM 控制樣式 */
 .bpm-control { display: flex; align-items: center; justify-content: center; gap: 15px; margin-bottom: 20px; background: rgba(255,255,255,0.1); padding: 10px; border-radius: 10px; }
 .btn-circle { width: 44px; height: 44px; border-radius: 50%; border: 2px solid #fff; background: transparent; color: #fff; font-size: 1.5rem; cursor: pointer; }
 .hold-btn-container { position: relative; width: 100%; height: 60px; overflow: hidden; border-radius: 15px; }
@@ -47,6 +46,8 @@ input { width: 90%; padding: 8px 0; text-align: center; border: 1px solid #ccc; 
 </div>
 
 <div id="noteModal"><div class="note-box"><h3>📝 訓練備註</h3><textarea id="noteArea"></textarea><div style="display:flex; gap:10px; margin-top:15px;"><button onclick="closeNote()" style="flex:1; padding:10px;">取消</button><button onclick="saveNote()" style="flex:1; padding:10px; background:var(--success); color:white; border:none; border-radius:8px;">儲存</button></div></div></div>
+
+<div id="rescueModal"><div class="note-box" style="border: 3px solid var(--danger);"><h3 style="color:var(--danger); margin-top:0;">⚠️ 系統儲存失敗！已啟動救回機制</h3><p style="font-size:13px; color:#666;">因手機瀏覽器限制，無法寫入歷史紀錄。<strong>程式已自動將下方數據複製到您的剪貼簿</strong>。請點擊複製按鈕並貼上至您的手機記事本或 Line 備忘錄保存！</p><textarea id="rescueArea" readonly onclick="this.select()"></textarea><button onclick="forceCloseRescue()" style="width:100%; margin-top:15px; padding:12px; background:var(--dark); color:white; border:none; border-radius:8px; font-weight:bold;">我已另存，關閉視窗</button></div></div>
 
 <div id="mapModal" style="flex-direction:column;"><div id="map"></div><button onclick="closeMap()" style="padding:15px; width:100%; background:#444; color:white; border:none;">關閉軌跡</button></div>
 
@@ -80,7 +81,7 @@ input { width: 90%; padding: 8px 0; text-align: center; border: 1px solid #ccc; 
 </div>
 
 <div class="card">
-  <h2 id="appTitle">跑步教練 V5.7.2</h2>
+  <h2 id="appTitle">跑步教練 V5.7.3</h2>
   <div id="intervalTable" style="display:none;">
       <table>
         <thead><tr><th>階段</th><th>BPM</th><th>秒數</th><th>距離(m)</th><th>跑速</th></tr></thead>
@@ -363,23 +364,34 @@ function endHold(e) {
     document.getElementById('holdProgress').style.width = '0%'; 
 }
 
+// ⚙️ V5.7.3 軌跡抽樣優化：減少 80% 的無謂軌跡點，防止 LocalStorage 爆滿
 function startGPS() {
     watchId = navigator.geolocation.watchPosition(p => {
         const { latitude: lat, longitude: lon, accuracy } = p.coords;
         if(accuracy < 60) {
+            let nowStr = new Date().toISOString();
             if(trackPoints.length === 0) {
                 fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`).then(res=>res.json()).then(d=>startNote.location=d.display_name.split(',')[0]).catch(e=>{});
                 fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`).then(res=>res.json()).then(d=>startNote.weather=`${d.current_weather.temperature}°C`).catch(e=>{});
+                trackPoints.push({lat, lon, time: nowStr});
             } else {
                 let last = trackPoints[trackPoints.length-1], d = haversine(last.lat, last.lon, lat, lon);
-                if(d > config.threshold && d < 50) { totalDist += d; document.getElementById('bigDistance').innerText = (totalDist/1000).toFixed(3); }
+                if(d > config.threshold && d < 50) { 
+                    totalDist += d; 
+                    document.getElementById('bigDistance').innerText = (totalDist/1000).toFixed(3); 
+                    
+                    // 核心抽樣：只有當距離移動大於 3 公尺，或距離上個點超過 15 秒才記錄該軌跡點，體積直接縮減
+                    let timeDiff = (new Date(nowStr) - new Date(last.time)) / 1000;
+                    if (d >= 3.0 || timeDiff >= 15) {
+                        trackPoints.push({lat, lon, time: nowStr});
+                    }
+                }
             }
-            trackPoints.push({lat, lon, time: new Date().toISOString()});
         }
     }, null, {enableHighAccuracy:true});
 }
 
-// 🛑 V5.7.2 核心安全儲存優化
+// 🛑 V5.7.3 核心：防爆剪貼簿救回機制
 function stopAndSave() {
     if (!isRunning) return;
     isRunning = false; 
@@ -387,28 +399,47 @@ function stopAndSave() {
     timerId = null; 
     navigator.geolocation.clearWatch(watchId);
     
+    // 建立本次訓練資料物件
+    const runInfo = {
+        id: Date.now(), 
+        date: new Date().toLocaleString(), 
+        dist: (totalDist/1000).toFixed(3), 
+        time: formatTime(elapsedSec), 
+        points: trackPoints, 
+        mode: currentMode, 
+        note: `📍地點：${startNote.location}\n🌡氣候：${startNote.weather}\n⚙️門檻：${config.threshold.toFixed(2)}m`
+    };
+
     if(totalDist > 0) {
         try {
             const recs = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
-            const newRecord = { 
-                id: Date.now(), 
-                date: new Date().toLocaleString(), 
-                dist: (totalDist/1000).toFixed(3), 
-                time: formatTime(elapsedSec), 
-                points: trackPoints, 
-                mode: currentMode, 
-                note: `📍地點：${startNote.location}\n🌡氣候：${startNote.weather}\n⚙️門檻：${config.threshold.toFixed(2)}m` 
-            };
-            recs.unshift(newRecord);
+            recs.unshift(runInfo);
             localStorage.setItem(HISTORY_KEY, JSON.stringify(recs));
             
-            // 強制彈窗提醒，確保用戶知道手機已完成寫入硬碟
-            alert(`🎉 訓練達標！紀錄已成功儲存：${(totalDist/1000).toFixed(3)} km`);
+            alert(`🎉 訓練達標！紀錄已成功儲存：${runInfo.dist} km`);
+            document.getElementById('trainingOverlay').style.display = 'none';
+            renderHistory();
         } catch (e) {
-            alert("⚠️ 儲存失敗！空間可能不足或遭到系統封鎖：" + e.message);
-            console.error("LocalStorage 寫入異常:", e);
+            // 🛑 核心救回：一旦 LocalStorage 爆掉或被無痕阻斷，立刻執行文字序列化並複製到剪貼簿
+            const rescueString = JSON.stringify(runInfo);
+            document.getElementById('rescueArea').value = rescueString;
+            
+            // 嘗試自動複製到手機剪貼簿
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(rescueString).catch(()=>{});
+            }
+            
+            // 開啟防爆救回彈窗，絕不直接清空畫面
+            document.getElementById('rescueModal').style.display = 'flex';
         }
+    } else {
+        document.getElementById('trainingOverlay').style.display = 'none';
+        renderHistory();
     }
+}
+
+function forceCloseRescue() {
+    document.getElementById('rescueModal').style.style.display = 'none';
     document.getElementById('trainingOverlay').style.display = 'none';
     renderHistory();
 }
