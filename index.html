@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>跑步教練 V5.7.3 - 雙重備份防爆版</title>
+<title>跑步教練 V5.7.5 - 經典精準防爆版</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -81,7 +81,7 @@ input { width: 90%; padding: 8px 0; text-align: center; border: 1px solid #ccc; 
 </div>
 
 <div class="card">
-  <h2 id="appTitle">跑步教練 V5.7.3</h2>
+  <h2 id="appTitle">跑步教練 V5.7.5</h2>
   <div id="intervalTable" style="display:none;">
       <table>
         <thead><tr><th>階段</th><th>BPM</th><th>秒數</th><th>距離(m)</th><th>跑速</th></tr></thead>
@@ -364,7 +364,7 @@ function endHold(e) {
     document.getElementById('holdProgress').style.width = '0%'; 
 }
 
-// ⚙️ V5.7.3 軌跡抽樣優化：減少 80% 的無謂軌跡點，防止 LocalStorage 爆滿
+// 🛠️ V5.7.5 核心搬回：完全還原 V5.7.2 經典的 GPS 高精準度即時計算與記錄邏輯
 function startGPS() {
     watchId = navigator.geolocation.watchPosition(p => {
         const { latitude: lat, longitude: lon, accuracy } = p.coords;
@@ -379,19 +379,14 @@ function startGPS() {
                 if(d > config.threshold && d < 50) { 
                     totalDist += d; 
                     document.getElementById('bigDistance').innerText = (totalDist/1000).toFixed(3); 
-                    
-                    // 核心抽樣：只有當距離移動大於 3 公尺，或距離上個點超過 15 秒才記錄該軌跡點，體積直接縮減
-                    let timeDiff = (new Date(nowStr) - new Date(last.time)) / 1000;
-                    if (d >= 3.0 || timeDiff >= 15) {
-                        trackPoints.push({lat, lon, time: nowStr});
-                    }
+                    trackPoints.push({lat, lon, time: nowStr}); // 100% 還原每步更新
                 }
             }
         }
     }, null, {enableHighAccuracy:true});
 }
 
-// 🛑 V5.7.3 核心：防爆剪貼簿救回機制
+// 🛑 V5.7.5 儲存與雙重備份：將完整的精準資料在最後一刻安全過濾與備份
 function stopAndSave() {
     if (!isRunning) return;
     isRunning = false; 
@@ -399,13 +394,27 @@ function stopAndSave() {
     timerId = null; 
     navigator.geolocation.clearWatch(watchId);
     
-    // 建立本次訓練資料物件
+    // 💡 為了避免 5MB 塞爆硬碟，我們「只在儲存前」將大長途軌跡點進行抽樣瘦身，完全不影響跑步當下的距離精準度
+    let optimizedPoints = [];
+    if (trackPoints.length > 0) {
+        optimizedPoints.push(trackPoints[0]);
+        for (let i = 1; i < trackPoints.length; i++) {
+            let lastSaved = optimizedPoints[optimizedPoints.length - 1];
+            let distDiff = haversine(lastSaved.lat, lastSaved.lon, trackPoints[i].lat, trackPoints[i].lon);
+            let timeDiff = (new Date(trackPoints[i].time) - new Date(lastSaved.time)) / 1000;
+            
+            if (distDiff >= 6.0 || timeDiff >= 12 || i === trackPoints.length - 1) {
+                optimizedPoints.push(trackPoints[i]);
+            }
+        }
+    }
+
     const runInfo = {
         id: Date.now(), 
         date: new Date().toLocaleString(), 
         dist: (totalDist/1000).toFixed(3), 
         time: formatTime(elapsedSec), 
-        points: trackPoints, 
+        points: optimizedPoints, 
         mode: currentMode, 
         note: `📍地點：${startNote.location}\n🌡氣候：${startNote.weather}\n⚙️門檻：${config.threshold.toFixed(2)}m`
     };
@@ -420,16 +429,12 @@ function stopAndSave() {
             document.getElementById('trainingOverlay').style.display = 'none';
             renderHistory();
         } catch (e) {
-            // 🛑 核心救回：一旦 LocalStorage 爆掉或被無痕阻斷，立刻執行文字序列化並複製到剪貼簿
+            // 防爆剪貼簿救回機制
             const rescueString = JSON.stringify(runInfo);
             document.getElementById('rescueArea').value = rescueString;
-            
-            // 嘗試自動複製到手機剪貼簿
             if (navigator.clipboard && navigator.clipboard.writeText) {
                 navigator.clipboard.writeText(rescueString).catch(()=>{});
             }
-            
-            // 開啟防爆救回彈窗，絕不直接清空畫面
             document.getElementById('rescueModal').style.display = 'flex';
         }
     } else {
@@ -439,7 +444,7 @@ function stopAndSave() {
 }
 
 function forceCloseRescue() {
-    document.getElementById('rescueModal').style.style.display = 'none';
+    document.getElementById('rescueModal').style.display = 'none';
     document.getElementById('trainingOverlay').style.display = 'none';
     renderHistory();
 }
