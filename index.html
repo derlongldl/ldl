@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>跑步教練 V5.7.5 - 經典精準防爆版</title>
+<title>跑步教練 V5.7.6 - 達標續跑與精準門檻修復版</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -81,7 +81,7 @@ input { width: 90%; padding: 8px 0; text-align: center; border: 1px solid #ccc; 
 </div>
 
 <div class="card">
-  <h2 id="appTitle">跑步教練 V5.7.5</h2>
+  <h2 id="appTitle">跑步教練 V5.7.6</h2>
   <div id="intervalTable" style="display:none;">
       <table>
         <thead><tr><th>階段</th><th>BPM</th><th>秒數</th><th>距離(m)</th><th>跑速</th></tr></thead>
@@ -189,7 +189,7 @@ function uiUpdate() {
     if(document.getElementById('genDist')) config.genDist = +document.getElementById('genDist').value;
     if(document.getElementById('loopCount')) config.loops = +document.getElementById('loopCount').value;
     if(config.genSec > 0 && config.genDist > 0 && document.getElementById('genPaceText')) document.getElementById('genPaceText').innerText = formatTime(Math.floor(config.genSec/(config.genDist/1000)));
-    document.getElementById('baseThresDisp').innerText = config.threshold.toFixed(2);
+    if(document.getElementById('baseThresDisp')) document.getElementById('baseThresDisp').innerText = config.threshold.toFixed(2);
     let tT = config.sec[0] + ((config.sec[1]+config.sec[2]+config.sec[3])*config.loops) + config.sec[4];
     let tD = config.dist[0] + ((config.dist[1]+config.dist[2]+config.dist[3])*config.loops) + config.dist[4];
     document.getElementById('totalPlanTime').innerText = (tT/60).toFixed(1);
@@ -232,7 +232,19 @@ async function toggleStart(isAuto) {
                 await runPhase(`恢復(${j+1}/${config.loops})`, config.sec[3], config.bpm[3]);
             }
             if(isRunning) await runPhase("舒緩", config.sec[4], config.bpm[4]);
-            if(isRunning) stopAndSave(); 
+            
+            // 🛠️ 修正：如果是「達標儲存(isAuto == true)」就自動停止；如果是「續跑」則進入無限續跑節拍
+            if(isRunning) {
+                if (isAuto) {
+                    stopAndSave(); 
+                } else {
+                    document.getElementById('statusTop').innerText = "● 續跑中";
+                    while(isRunning) {
+                        document.getElementById('phaseDetail').innerText = `亞索達標 | 續跑中...`;
+                        await new Promise(r => setTimeout(r, 1000));
+                    }
+                }
+            }
         } else {
             document.getElementById('statusTop').innerText = "● 一般練跑";
             currentRunningBPM = config.genBPM;
@@ -364,7 +376,6 @@ function endHold(e) {
     document.getElementById('holdProgress').style.width = '0%'; 
 }
 
-// 🛠️ V5.7.5 核心搬回：完全還原 V5.7.2 經典的 GPS 高精準度即時計算與記錄邏輯
 function startGPS() {
     watchId = navigator.geolocation.watchPosition(p => {
         const { latitude: lat, longitude: lon, accuracy } = p.coords;
@@ -379,14 +390,13 @@ function startGPS() {
                 if(d > config.threshold && d < 50) { 
                     totalDist += d; 
                     document.getElementById('bigDistance').innerText = (totalDist/1000).toFixed(3); 
-                    trackPoints.push({lat, lon, time: nowStr}); // 100% 還原每步更新
+                    trackPoints.push({lat, lon, time: nowStr}); 
                 }
             }
         }
     }, null, {enableHighAccuracy:true});
 }
 
-// 🛑 V5.7.5 儲存與雙重備份：將完整的精準資料在最後一刻安全過濾與備份
 function stopAndSave() {
     if (!isRunning) return;
     isRunning = false; 
@@ -394,7 +404,6 @@ function stopAndSave() {
     timerId = null; 
     navigator.geolocation.clearWatch(watchId);
     
-    // 💡 為了避免 5MB 塞爆硬碟，我們「只在儲存前」將大長途軌跡點進行抽樣瘦身，完全不影響跑步當下的距離精準度
     let optimizedPoints = [];
     if (trackPoints.length > 0) {
         optimizedPoints.push(trackPoints[0]);
@@ -429,7 +438,6 @@ function stopAndSave() {
             document.getElementById('trainingOverlay').style.display = 'none';
             renderHistory();
         } catch (e) {
-            // 防爆剪貼簿救回機制
             const rescueString = JSON.stringify(runInfo);
             document.getElementById('rescueArea').value = rescueString;
             if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -482,7 +490,13 @@ function saveNote() { let recs = JSON.parse(localStorage.getItem(HISTORY_KEY)); 
 function closeNote() { document.getElementById('noteModal').style.display='none'; }
 function editDist(id) { let recs = JSON.parse(localStorage.getItem(HISTORY_KEY)); let idx = recs.findIndex(x => x.id === id); let newVal = prompt("修正里程 (km):", recs[idx].dist); if(newVal) { recs[idx].dist = parseFloat(newVal).toFixed(3); localStorage.setItem(HISTORY_KEY, JSON.stringify(recs)); renderHistory(); } }
 function toggleAlarm(val){ config.alarmOn = val; localStorage.setItem(CONFIG_KEY, JSON.stringify(config)); }
-function adjThres(v) { config.threshold = Math.max(0.01, config.threshold + v*0.01); uiUpdate(); }
+
+// 🛠️ 修正：調整門檻後立即觸發 uiUpdate 以更新主畫面文字顯示
+function adjThres(v) { 
+    config.threshold = Math.max(0.01, config.threshold + v * 0.01); 
+    uiUpdate(); 
+}
+
 function formatTime(s) { if(!s||s<=0) return "00:00"; return Math.floor(s/60).toString().padStart(2,'0')+":"+(s%60).toString().padStart(2,'0'); }
 function haversine(lat1,lon1,lat2,lon2) { const R=6371000; const dLat=(lat2-lat1)*Math.PI/180, dLon=(lon2-lon1)*Math.PI/180; const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2; return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a)); }
 
