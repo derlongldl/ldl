@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>跑步教練 V5.7.6 - 達標續跑與精準門檻修復版</title>
+<title>跑步教練 V5.7.7 - GPS門檻修正版</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -81,7 +81,7 @@ input { width: 90%; padding: 8px 0; text-align: center; border: 1px solid #ccc; 
 </div>
 
 <div class="card">
-  <h2 id="appTitle">跑步教練 V5.7.6</h2>
+  <h2 id="appTitle">跑步教練 V5.7.7</h2>
   <div id="intervalTable" style="display:none;">
       <table>
         <thead><tr><th>階段</th><th>BPM</th><th>秒數</th><th>距離(m)</th><th>跑速</th></tr></thead>
@@ -122,8 +122,9 @@ input { width: 90%; padding: 8px 0; text-align: center; border: 1px solid #ccc; 
 <div class="card"><strong>歷史紀錄</strong><div id="historyContainer"></div></div>
 
 <script>
-const CONFIG_KEY = 'run_config_v556';
-const HISTORY_KEY = 'run_history_v556';
+// 版本更新為 V5.7.7，避免舊版本緩存影響
+const CONFIG_KEY = 'run_config_v577';
+const HISTORY_KEY = 'run_history_v577';
 const PHASES = ["熱身", "間歇", "衝刺", "恢復", "舒緩"];
 let currentMode = null, isRunning = false, totalDist = 0, elapsedSec = 0;
 let audioCtx = null, timerId = null, watchId = null, trackPoints = [];
@@ -148,8 +149,12 @@ function resetMode() {
 }
 
 function init() {
-    const saved = localStorage.getItem(CONFIG_KEY);
+    // 優先載入 V5.7.7 配置；若無則嘗試向後相容舊版本 key
+    let saved = localStorage.getItem(CONFIG_KEY);
+    if(!saved) saved = localStorage.getItem('run_config_v556');
+    
     if(saved) try { Object.assign(config, JSON.parse(saved)); } catch(e){}
+    
     let html = "";
     PHASES.forEach((p, i) => {
         html += `<tr><td><b>${p}</b></td><td><input type="number" id="bpm_${i}" oninput="uiUpdate()"></td><td><input type="number" id="sec_${i}" oninput="uiUpdate()"></td><td><input type="number" id="dist_${i}" oninput="uiUpdate()"></td><td class="pace-text" id="pace_${i}">--</td></tr>`;
@@ -189,11 +194,14 @@ function uiUpdate() {
     if(document.getElementById('genDist')) config.genDist = +document.getElementById('genDist').value;
     if(document.getElementById('loopCount')) config.loops = +document.getElementById('loopCount').value;
     if(config.genSec > 0 && config.genDist > 0 && document.getElementById('genPaceText')) document.getElementById('genPaceText').innerText = formatTime(Math.floor(config.genSec/(config.genDist/1000)));
+    
     if(document.getElementById('baseThresDisp')) document.getElementById('baseThresDisp').innerText = config.threshold.toFixed(2);
+    
     let tT = config.sec[0] + ((config.sec[1]+config.sec[2]+config.sec[3])*config.loops) + config.sec[4];
     let tD = config.dist[0] + ((config.dist[1]+config.dist[2]+config.dist[3])*config.loops) + config.dist[4];
     document.getElementById('totalPlanTime').innerText = (tT/60).toFixed(1);
     document.getElementById('totalPlanDist').innerText = (tD/1000).toFixed(2);
+    
     localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
 }
 
@@ -233,7 +241,6 @@ async function toggleStart(isAuto) {
             }
             if(isRunning) await runPhase("舒緩", config.sec[4], config.bpm[4]);
             
-            // 🛠️ 修正：如果是「達標儲存(isAuto == true)」就自動停止；如果是「續跑」則進入無限續跑節拍
             if(isRunning) {
                 if (isAuto) {
                     stopAndSave(); 
@@ -430,7 +437,11 @@ function stopAndSave() {
 
     if(totalDist > 0) {
         try {
-            const recs = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+            // 自動嘗試讀取舊歷史紀錄或建立新紀錄
+            let recs = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+            if (recs.length === 0) {
+                recs = JSON.parse(localStorage.getItem('run_history_v556') || "[]");
+            }
             recs.unshift(runInfo);
             localStorage.setItem(HISTORY_KEY, JSON.stringify(recs));
             
@@ -459,7 +470,10 @@ function forceCloseRescue() {
 
 function renderHistory() {
     try {
-        const recs = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+        let recs = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+        if (recs.length === 0) {
+            recs = JSON.parse(localStorage.getItem('run_history_v556') || "[]");
+        }
         document.getElementById('historyContainer').innerHTML = recs.map(r => `
             <div class="history-card">
                 <b>🏃 ${r.dist} km | ${r.time}</b> (${r.date})
@@ -477,7 +491,8 @@ function renderHistory() {
 }
 
 function exportGPX(id) {
-    const r = JSON.parse(localStorage.getItem(HISTORY_KEY)).find(x=>x.id===id); if(!r || !r.points) return;
+    const recs = JSON.parse(localStorage.getItem(HISTORY_KEY) || localStorage.getItem('run_history_v556') || "[]");
+    const r = recs.find(x=>x.id===id); if(!r || !r.points) return;
     let gpx = `<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="RunCoach"><trk><trkseg>`;
     r.points.forEach(p => { gpx += `<trkpt lat="${p.lat}" lon="${p.lon}"><time>${p.time}</time></trkpt>`; });
     gpx += `</trkseg></trk></gpx>`;
@@ -485,13 +500,33 @@ function exportGPX(id) {
 }
 
 let curEditId = null;
-function editNote(id) { curEditId = id; const r = JSON.parse(localStorage.getItem(HISTORY_KEY)).find(x=>x.id===id); document.getElementById('noteArea').value = r.note||""; document.getElementById('noteModal').style.display='flex'; }
-function saveNote() { let recs = JSON.parse(localStorage.getItem(HISTORY_KEY)); recs.find(x=>x.id===curEditId).note = document.getElementById('noteArea').value; localStorage.setItem(HISTORY_KEY, JSON.stringify(recs)); closeNote(); renderHistory(); }
+function editNote(id) { 
+    curEditId = id; 
+    const recs = JSON.parse(localStorage.getItem(HISTORY_KEY) || localStorage.getItem('run_history_v556') || "[]");
+    const r = recs.find(x=>x.id===id); 
+    document.getElementById('noteArea').value = r.note||""; 
+    document.getElementById('noteModal').style.display='flex'; 
+}
+function saveNote() { 
+    let recs = JSON.parse(localStorage.getItem(HISTORY_KEY) || localStorage.getItem('run_history_v556') || "[]"); 
+    recs.find(x=>x.id===curEditId).note = document.getElementById('noteArea').value; 
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(recs)); 
+    closeNote(); 
+    renderHistory(); 
+}
 function closeNote() { document.getElementById('noteModal').style.display='none'; }
-function editDist(id) { let recs = JSON.parse(localStorage.getItem(HISTORY_KEY)); let idx = recs.findIndex(x => x.id === id); let newVal = prompt("修正里程 (km):", recs[idx].dist); if(newVal) { recs[idx].dist = parseFloat(newVal).toFixed(3); localStorage.setItem(HISTORY_KEY, JSON.stringify(recs)); renderHistory(); } }
+function editDist(id) { 
+    let recs = JSON.parse(localStorage.getItem(HISTORY_KEY) || localStorage.getItem('run_history_v556') || "[]"); 
+    let idx = recs.findIndex(x => x.id === id); 
+    let newVal = prompt("修正里程 (km):", recs[idx].dist); 
+    if(newVal) { 
+        recs[idx].dist = parseFloat(newVal).toFixed(3); 
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(recs)); 
+        renderHistory(); 
+    } 
+}
 function toggleAlarm(val){ config.alarmOn = val; localStorage.setItem(CONFIG_KEY, JSON.stringify(config)); }
 
-// 🛠️ 修正：調整門檻後立即觸發 uiUpdate 以更新主畫面文字顯示
 function adjThres(v) { 
     config.threshold = Math.max(0.01, config.threshold + v * 0.01); 
     uiUpdate(); 
@@ -502,7 +537,8 @@ function haversine(lat1,lon1,lat2,lon2) { const R=6371000; const dLat=(lat2-lat1
 
 let map=null, polyline=null;
 function viewTrack(id) {
-    const r = JSON.parse(localStorage.getItem(HISTORY_KEY)).find(x=>x.id===id);
+    const recs = JSON.parse(localStorage.getItem(HISTORY_KEY) || localStorage.getItem('run_history_v556') || "[]");
+    const r = recs.find(x=>x.id===id);
     document.getElementById('mapModal').style.display = 'flex';
     setTimeout(() => {
         if (!map) { map = L.map('map').setView([r.points[0].lat, r.points[0].lon], 16); L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map); }
@@ -511,7 +547,13 @@ function viewTrack(id) {
     }, 300);
 }
 function closeMap() { document.getElementById('mapModal').style.display = 'none'; }
-function deleteRec(id) { if(confirm("刪除紀錄？")) { let recs = JSON.parse(localStorage.getItem(HISTORY_KEY)).filter(x=>x.id!==id); localStorage.setItem(HISTORY_KEY, JSON.stringify(recs)); renderHistory(); } }
+function deleteRec(id) { 
+    if(confirm("刪除紀錄？")) { 
+        let recs = JSON.parse(localStorage.getItem(HISTORY_KEY) || localStorage.getItem('run_history_v556') || "[]").filter(x=>x.id!==id); 
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(recs)); 
+        renderHistory(); 
+    } 
+}
 window.onload = init;
 </script>
 </body>
