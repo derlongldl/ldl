@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>跑步教練 V5.7.8</title>
+<title>跑步教練 V5.7.9</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -35,7 +35,9 @@ input { width: 90%; padding: 8px 0; text-align: center; border: 1px solid #ccc; 
 .btn-circle { width: 44px; height: 44px; border-radius: 50%; border: 2px solid #fff; background: transparent; color: #fff; font-size: 1.5rem; cursor: pointer; }
 .hold-btn-container { position: relative; width: 100%; height: 60px; overflow: hidden; border-radius: 15px; }
 #holdProgress { position: absolute; left: 0; top: 0; height: 100%; background: rgba(255,255,255,0.3); width: 0%; pointer-events: none; }
-.thres-input { width: 70px; padding: 4px; font-size: 1rem; text-align: center; margin: 0 5px; }
+.thres-input { width: 55px; padding: 4px; font-size: 0.95rem; text-align: center; margin: 0 2px; }
+.ratio-input { width: 50px; padding: 4px; font-size: 0.95rem; text-align: center; margin: 0 2px; }
+.mini-btn { padding: 4px 8px; font-size: 0.9rem; }
 </style>
 </head>
 <body>
@@ -82,7 +84,7 @@ input { width: 90%; padding: 8px 0; text-align: center; border: 1px solid #ccc; 
 </div>
 
 <div class="card">
-  <h2 id="appTitle">跑步教練 V5.7.8</h2>
+  <h2 id="appTitle">跑步教練 V5.7.9</h2>
   <div id="intervalTable" style="display:none;">
       <table>
         <thead><tr><th>階段</th><th>BPM</th><th>秒數</th><th>距離(m)</th><th>跑速</th></tr></thead>
@@ -110,18 +112,27 @@ input { width: 90%; padding: 8px 0; text-align: center; border: 1px solid #ccc; 
   </div>
   <button onclick="resetMode()" style="width:100%; margin-top:10px; padding:8px; background:#ddd; border:none; border-radius:8px; color:#333; font-size:13px; font-weight:bold;">↺ 切換訓練模式</button>
 
-  <!-- 調整至切換模式下方 -->
-  <div class="control-row" style="border-top:1px dashed #ccc; margin-top:12px; padding-top:10px; display:flex; justify-content:space-between; align-items:center;">
-    <span>警示音：</span>
-    <label><input type="checkbox" id="alarmToggle" onchange="toggleAlarm(this.checked)"> 開啟</label>
+  <!-- 警示音 + 距離比例（同列調整） -->
+  <div class="control-row" style="border-top:1px dashed #ccc; margin-top:12px; padding-top:10px; display:flex; justify-content:space-between; align-items:center; font-size:0.9rem;">
+    <div>
+      <span>警示音：</span>
+      <label><input type="checkbox" id="alarmToggle" onchange="toggleAlarm(this.checked)"> 開啟</label>
+    </div>
+    <div style="display:flex; align-items:center;">
+      <span>距離比例：</span>
+      <button class="mini-btn" onclick="adjRatio(-1)">－</button>
+      <input type="number" id="ratioInput" class="ratio-input" step="1" min="1" max="200" oninput="manualRatioChange(this.value)">%
+      <button class="mini-btn" onclick="adjRatio(1)">＋</button>
+    </div>
   </div>
 
-  <div class="control-row" style="margin-top:8px; display:flex; justify-content:space-between; align-items:center;">
+  <!-- GPS 門檻調整 -->
+  <div class="control-row" style="margin-top:8px; display:flex; justify-content:space-between; align-items:center; font-size:0.9rem;">
     <span>GPS門檻：</span>
     <div style="display:flex; align-items:center;">
-      <button onclick="adjThres(-0.01)" style="padding:5px 10px;">－</button>
+      <button class="mini-btn" onclick="adjThres(-0.01)">－</button>
       <input type="number" id="thresInput" class="thres-input" step="0.01" min="0.01" oninput="manualThresChange(this.value)"> m
-      <button onclick="adjThres(0.01)" style="padding:5px 10px;">＋</button>
+      <button class="mini-btn" onclick="adjThres(0.01)">＋</button>
     </div>
   </div>
 </div>
@@ -135,7 +146,7 @@ const PHASES = ["熱身", "間歇", "衝刺", "恢復", "舒緩"];
 let currentMode = null, isRunning = false, totalDist = 0, elapsedSec = 0;
 let audioCtx = null, timerId = null, watchId = null, trackPoints = [];
 let lastDistCheck = 0, distStallCount = 0, currentSoundType = true;
-let config = { bpm:[180,205,215,195,180], sec:[180,60,60,120,180], dist:[400,400,400,400,400], loops:8, threshold:0.35, genBPM:180, genSec:1200, genDist:3000, alarmOn:true };
+let config = { bpm:[180,205,215,195,180], sec:[180,60,60,120,180], dist:[400,400,400,400,400], loops:8, threshold:0.35, distRatio:100, genBPM:180, genSec:1200, genDist:3000, alarmOn:true };
 let startNote = { location: "偵測中", weather: "偵測中" };
 let lastKmDist = 0, lastKmSec = 0, currentRunningBPM = 180;
 let holdTimer = null, holdPercent = 0;
@@ -157,6 +168,8 @@ function resetMode() {
 function init() {
     const saved = localStorage.getItem(CONFIG_KEY);
     if(saved) try { Object.assign(config, JSON.parse(saved)); } catch(e){}
+    if(!config.distRatio) config.distRatio = 100; // 預設 100%
+    
     let html = "";
     PHASES.forEach((p, i) => {
         html += `<tr><td><b>${p}</b></td><td><input type="number" id="bpm_${i}" oninput="uiUpdate()"></td><td><input type="number" id="sec_${i}" oninput="uiUpdate()"></td><td><input type="number" id="dist_${i}" oninput="uiUpdate()"></td><td class="pace-text" id="pace_${i}">--</td></tr>`;
@@ -179,6 +192,7 @@ function fillFormFromConfig() {
     if(document.getElementById('genSec')) document.getElementById('genSec').value = config.genSec;
     if(document.getElementById('genDist')) document.getElementById('genDist').value = config.genDist;
     if(document.getElementById('thresInput')) document.getElementById('thresInput').value = config.threshold.toFixed(2);
+    if(document.getElementById('ratioInput')) document.getElementById('ratioInput').value = config.distRatio;
     if(document.getElementById('alarmToggle')) document.getElementById('alarmToggle').checked = config.alarmOn;
 }
 
@@ -214,6 +228,20 @@ function manualThresChange(v) {
 function adjThres(v) { 
     config.threshold = Math.max(0.01, parseFloat((config.threshold + v).toFixed(2))); 
     document.getElementById('thresInput').value = config.threshold.toFixed(2);
+    localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+}
+
+function manualRatioChange(v) {
+    let num = parseInt(v);
+    if (!isNaN(num) && num > 0) {
+        config.distRatio = num;
+        localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+    }
+}
+
+function adjRatio(v) {
+    config.distRatio = Math.max(1, config.distRatio + v);
+    document.getElementById('ratioInput').value = config.distRatio;
     localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
 }
 
@@ -407,7 +435,9 @@ function startGPS() {
             } else {
                 let last = trackPoints[trackPoints.length-1], d = haversine(last.lat, last.lon, lat, lon);
                 if(d > config.threshold && d < 50) { 
-                    totalDist += d; 
+                    // 套用距離比例校正
+                    let adjustedDist = d * ((config.distRatio || 100) / 100);
+                    totalDist += adjustedDist; 
                     document.getElementById('bigDistance').innerText = (totalDist/1000).toFixed(3); 
                     trackPoints.push({lat, lon, time: nowStr}); 
                 }
@@ -444,7 +474,7 @@ function stopAndSave() {
         time: formatTime(elapsedSec), 
         points: optimizedPoints, 
         mode: currentMode, 
-        note: `📍地點：${startNote.location}\n🌡氣候：${startNote.weather}\n⚙️門檻：${config.threshold.toFixed(2)}m`
+        note: `📍地點：${startNote.location}\n🌡氣候：${startNote.weather}\n⚙️門檻：${config.threshold.toFixed(2)}m | 比例：${config.distRatio}%`
     };
 
     if(totalDist > 0) {
