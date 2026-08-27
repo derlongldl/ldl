@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>跑步教練 V5.8.1</title>
+<title>跑步教練 V5.9.0</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -14,8 +14,8 @@ h2 { text-align:center; color:var(--primary); margin:5px 0; font-size: 1.2rem; }
 table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
 th { background: #f8f9fa; padding: 8px 2px; border: 1px solid #dee2e6; color: #555; }
 td { padding: 6px 2px; border: 1px solid #dee2e6; text-align: center; }
-input[type="number"] { width: 90%; padding: 8px 0; text-align: center; border: 1px solid #ccc; border-radius: 4px; font-size: 0.95rem; }
-.pace-text { color: var(--primary); font-weight: bold; font-family: monospace; font-size: 1.25rem; }
+input[type="number"], input[type="text"] { width: 90%; padding: 6px 0; text-align: center; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9rem; }
+.pace-text { color: var(--primary); font-weight: bold; font-family: monospace; font-size: 1.1rem; }
 .big-val { font-size: 6rem; font-weight: 900; color: var(--primary); font-family: monospace; line-height: 1; margin: 10px 0; }
 .btn-action { padding: 18px; border: none; border-radius: 15px; font-size: 1.1rem; font-weight: bold; color: #fff; cursor: pointer; }
 .btn-block { width: 100%; display: block; }
@@ -23,13 +23,13 @@ input[type="number"] { width: 90%; padding: 8px 0; text-align: center; border: 1
 .btn-mode { width: 80%; padding: 35px 20px; font-size: 1.4rem; font-weight: bold; color: white; border: none; border-radius: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
 #trainingOverlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; color: #fff; z-index: 10000; flex-direction: column; justify-content: center; align-items: center; padding: 20px; box-sizing: border-box; }
 .bottom-bar { position: absolute; bottom: 30px; left: 20px; right: 20px; }
-#mapModal, #noteModal, #rescueModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 30000; justify-content: center; align-items: center; }
+#mapModal, #noteModal, #rescueModal, #dbModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 30000; justify-content: center; align-items: center; }
 #map { width: 100%; height: 80%; background: white; }
-.note-box { background: white; width: 85%; border-radius: 15px; padding: 20px; color: #333; }
+.note-box { background: white; width: 90%; max-height: 85vh; overflow-y: auto; border-radius: 15px; padding: 15px; color: #333; box-sizing: border-box; }
 #noteArea, #rescueArea { width: 100%; height: 120px; margin-top: 10px; padding: 8px; font-size: 14px; border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box; }
 .history-card { background: white; border-radius: 10px; padding: 12px; margin-bottom: 10px; border-left: 5px solid var(--primary); }
 .history-btns { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
-.btn-sm { flex: 1; min-width: 55px; padding: 8px 2px; font-size: 11px; border-radius: 6px; border: none; color: white; font-weight: bold; }
+.btn-sm { flex: 1; min-width: 55px; padding: 8px 2px; font-size: 11px; border-radius: 6px; border: none; color: white; font-weight: bold; cursor: pointer; }
 
 .bpm-control { display: flex; align-items: center; justify-content: center; gap: 15px; margin-bottom: 20px; background: rgba(255,255,255,0.1); padding: 10px; border-radius: 10px; }
 .btn-circle { width: 44px; height: 44px; border-radius: 50%; border: 2px solid #fff; background: transparent; color: #fff; font-size: 1.5rem; cursor: pointer; }
@@ -38,22 +38,34 @@ input[type="number"] { width: 90%; padding: 8px 0; text-align: center; border: 1
 .thres-input { width: 50px !important; padding: 4px 0 !important; font-size: 0.9rem !important; text-align: center; margin: 0 2px; }
 .ratio-input { width: 45px !important; padding: 4px 0 !important; font-size: 0.9rem !important; text-align: center; margin: 0 2px; }
 .mini-btn { padding: 4px 6px; font-size: 0.85rem; }
-
 .inline-check { display: inline-flex; align-items: center; white-space: nowrap; cursor: pointer; }
 .inline-check input { margin: 0 3px 0 0; }
+
+.db-item { border: 1px solid #ccc; border-radius: 8px; padding: 8px; margin-bottom: 10px; background: #fff; }
+.db-header { display: flex; justify-content: space-between; align-items: center; font-weight: bold; font-size: 1rem; margin-bottom: 5px; }
 </style>
 </head>
 <body>
 
 <div id="modeOverlay" style="display:none;">
     <h2 style="margin-bottom:10px;">🏃 請選擇跑步模式</h2>
-    <button class="btn-mode" style="background: var(--primary);" onclick="selectMode('interval')">亞索 800 (間歇)</button>
-    <button class="btn-mode" style="background: var(--info);" onclick="selectMode('general')">一般練跑模式</button>
+    <button class="btn-mode" style="background: var(--primary);" onclick="onSelectModeClick('interval')">亞索 800 (間歇)</button>
+    <button class="btn-mode" style="background: var(--info);" onclick="onSelectModeClick('general')">一般練跑模式</button>
+</div>
+
+<!-- 資料庫選擇與維護 Modal -->
+<div id="dbModal">
+    <div class="note-box">
+        <h3 id="dbTitle" style="margin-top:0; color:var(--primary); text-align:center;">資料庫</h3>
+        <div id="dbList"></div>
+        <button onclick="addDbItem()" style="width:100%; padding:10px; background:var(--info); color:white; border:none; border-radius:8px; font-weight:bold; margin-bottom:10px;">＋ 新增預設資料</button>
+        <button onclick="closeDbModal()" style="width:100%; padding:10px; background:#888; color:white; border:none; border-radius:8px;">關閉</button>
+    </div>
 </div>
 
 <div id="noteModal"><div class="note-box"><h3>📝 訓練備註</h3><textarea id="noteArea"></textarea><div style="display:flex; gap:10px; margin-top:15px;"><button onclick="closeNote()" style="flex:1; padding:10px;">取消</button><button onclick="saveNote()" style="flex:1; padding:10px; background:var(--success); color:white; border:none; border-radius:8px;">儲存</button></div></div></div>
 
-<div id="rescueModal"><div class="note-box" style="border: 3px solid var(--danger);"><h3 style="color:var(--danger); margin-top:0;">⚠️ 系統儲存失敗！已啟動救回機制</h3><p style="font-size:13px; color:#666;">因手機瀏覽器限制，無法寫入歷史紀錄。<strong>程式已自動將下方數據複製到您的剪貼簿</strong>。請點擊複製按鈕並貼上至您的手機記事本或 Line 備忘錄保存！</p><textarea id="rescueArea" readonly onclick="this.select()"></textarea><button onclick="forceCloseRescue()" style="width:100%; margin-top:15px; padding:12px; background:var(--dark); color:white; border:none; border-radius:8px; font-weight:bold;">我已另存，關閉視窗</button></div></div>
+<div id="rescueModal"><div class="note-box" style="border: 3px solid var(--danger);"><h3 style="color:var(--danger); margin-top:0;">⚠️ 系統儲存失敗！已啟動救回機制</h3><p style="font-size:13px; color:#666;">因手機瀏覽器限制，無法寫入歷史紀錄。<strong>程式已自動將下方數據複製到您的剪貼簿</strong>。</p><textarea id="rescueArea" readonly onclick="this.select()"></textarea><button onclick="forceCloseRescue()" style="width:100%; margin-top:15px; padding:12px; background:var(--dark); color:white; border:none; border-radius:8px; font-weight:bold;">我已另存，關閉視窗</button></div></div>
 
 <div id="mapModal" style="flex-direction:column;"><div id="map"></div><button onclick="closeMap()" style="padding:15px; width:100%; background:#444; color:white; border:none;">關閉軌跡</button></div>
 
@@ -64,7 +76,7 @@ input[type="number"] { width: 90%; padding: 8px 0; text-align: center; border: 1
     <div id="soundIndicator" style="color:var(--info); font-size:0.9rem;">等待 GPS...</div>
     <div style="display:flex; width:100%; justify-content:space-around; margin: 10px 0; text-align:center;">
         <div><div style="color:#888; font-size:0.8rem;">平均配速</div><div id="bigPaceAvg" style="font-size:1.8rem; font-family:monospace;">--:--</div></div>
-        <div><div style="color:#ffeb3b; font-size:0.8rem;">公里配速</div><div id="bigPaceCur" style="font-size:1.8rem; font-family:monospace; color:#ffeb3b;">--:--</div></div>
+        <div><div style="color:#ffeb3b; font-size:0.8rem;">階段配速</div><div id="bigPaceCur" style="font-size:1.8rem; font-family:monospace; color:#ffeb3b;">--:--</div></div>
         <div><div style="color:#888; font-size:0.8rem;">跑步時間</div><div id="bigElapsed" style="font-size:1.8rem; font-family:monospace;">00:00</div></div>
     </div>
 
@@ -87,7 +99,7 @@ input[type="number"] { width: 90%; padding: 8px 0; text-align: center; border: 1
 </div>
 
 <div class="card">
-  <h2 id="appTitle">跑步教練 V5.8.1</h2>
+  <h2 id="appTitle">跑步教練 V5.9.0</h2>
   <div id="intervalTable" style="display:none;">
       <table>
         <thead><tr><th>階段</th><th>BPM</th><th>秒數</th><th>距離(m)</th><th>跑速</th></tr></thead>
@@ -113,7 +125,7 @@ input[type="number"] { width: 90%; padding: 8px 0; text-align: center; border: 1
       <button onclick="toggleStart(true)" class="btn-action" style="background:var(--primary); flex:1;">1 達標儲存</button>
       <button onclick="toggleStart(false)" class="btn-action" style="background:var(--info); flex:1;">2 達標續跑</button>
   </div>
-  <button onclick="resetMode()" style="width:100%; margin-top:10px; padding:8px; background:#ddd; border:none; border-radius:8px; color:#333; font-size:13px; font-weight:bold;">↺ 切換訓練模式</button>
+  <button onclick="resetMode()" style="width:100%; margin-top:10px; padding:8px; background:#ddd; border:none; border-radius:8px; color:#333; font-size:13px; font-weight:bold;">↺ 切換訓練模式 / 載入資料庫</button>
 
   <div class="control-row" style="border-top:1px dashed #ccc; margin-top:12px; padding-top:10px; display:flex; justify-content:space-between; align-items:center; font-size:0.85rem;">
     <div style="display:flex; align-items:center; white-space:nowrap;">
@@ -143,25 +155,59 @@ input[type="number"] { width: 90%; padding: 8px 0; text-align: center; border: 1
 <div class="card"><strong>歷史紀錄</strong><div id="historyContainer"></div></div>
 
 <script>
-const CONFIG_KEY = 'run_config_v556';
-const HISTORY_KEY = 'run_history_v556';
-const PHASES = ["熱身", "間歇", "衝刺", "恢復", "舒緩"];
+const CONFIG_KEY = 'run_config_v590';
+const HISTORY_KEY = 'run_history_v590';
+const DB_INTERVAL_KEY = 'run_db_interval_v590';
+const DB_GENERAL_KEY = 'run_db_general_v590';
+
+// 需求1：名稱改為 1階、2階、3階、4階、5階
+const PHASES = ["1階", "2階", "3階", "4階", "5階"];
+
 let currentMode = null, isRunning = false, totalDist = 0, elapsedSec = 0;
 let audioCtx = null, timerId = null, watchId = null, trackPoints = [];
 let lastDistCheck = 0, distStallCount = 0, currentSoundType = true;
-let config = { bpm:[180,205,215,195,180], sec:[180,60,60,120,180], dist:[400,400,400,400,400], loops:8, threshold:0.35, distRatio:100, genBPM:180, genSec:1200, genDist:3000, alarmOn:true };
+let config = { bpm:[180,180,185,190,190], sec:[420,1080,1005,945,300], dist:[1000,3000,3000,3000,1000], loops:1, threshold:1.81, distRatio:100, genBPM:180, genSec:2400, genDist:3500, alarmOn:true };
 let startNote = { location: "偵測中", weather: "偵測中" };
 let lastKmDist = 0, lastKmSec = 0, currentRunningBPM = 180;
 let holdTimer = null, holdPercent = 0;
 
+// 階段配速統計變數 (需求3 & 4)
+let currentPhaseIndex = -1;
+let currentPhaseName = "";
+let phasePaceStats = {}; // { "1階": { minSec: Infinity, maxSec: 0 }, ... }
+let phaseStartDist = 0, phaseStartSec = 0;
+
+// 預設資料庫 (需求2)
+const DEFAULT_DB_INTERVAL = [
+    { name: "漸速跑10K", items: [{bpm:180,sec:420,dist:1000},{bpm:180,sec:1080,dist:3000},{bpm:185,sec:1005,dist:3000},{bpm:190,sec:945,dist:3000},{bpm:190,sec:300,dist:1000}], loops:1 },
+    { name: "漸速跑13K", items: [{bpm:180,sec:390,dist:1000},{bpm:180,sec:1440,dist:4000},{bpm:185,sec:1380,dist:4000},{bpm:190,sec:1320,dist:4000},{bpm:190,sec:320,dist:1000}], loops:1 },
+    { name: "挪威4*4", items: [{bpm:180,sec:420,dist:1000},{bpm:190,sec:240,dist:400},{bpm:180,sec:180,dist:400},{bpm:180,sec:300,dist:660},{bpm:180,sec:300,dist:600}], loops:4 },
+    { name: "亞索800", items: [{bpm:180,sec:180,dist:400},{bpm:190,sec:115,dist:400},{bpm:190,sec:115,dist:400},{bpm:180,sec:180,dist:400},{bpm:180,sec:180,dist:400}], loops:5 },
+    { name: "快速跑6K", items: [{bpm:180,sec:285,dist:1000},{bpm:190,sec:290,dist:1000},{bpm:190,sec:295,dist:1000},{bpm:190,sec:600,dist:2000},{bpm:190,sec:310,dist:1000}], loops:1 },
+    { name: "10K賽事", items: [{bpm:180,sec:570,dist:2000},{bpm:190,sec:580,dist:2000},{bpm:190,sec:590,dist:2000},{bpm:190,sec:600,dist:2000},{bpm:190,sec:610,dist:2000}], loops:1 },
+    { name: "半馬配速", items: [{bpm:180,sec:420,dist:1000},{bpm:185,sec:1440,dist:4000},{bpm:185,sec:1380,dist:4000},{bpm:185,sec:990,dist:3000},{bpm:180,sec:320,dist:1000}], loops:1 },
+    { name: "LSD15K", items: [{bpm:180,sec:450,dist:1000},{bpm:185,sec:1680,dist:4000},{bpm:185,sec:1680,dist:4000},{bpm:185,sec:1680,dist:4000},{bpm:180,sec:870,dist:2000}], loops:1 }
+];
+
+const DEFAULT_DB_GENERAL = [
+    { name: "旋轉功", bpm: 180, sec: 2400, dist: 3500 },
+    { name: "慢跑6K", bpm: 180, sec: 2400, dist: 6150 },
+    { name: "恢復跑", bpm: 180, sec: 3000, dist: 7000 }
+];
+
 function getAudioContext() {
-    if (!audioCtx) {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    }
-    if (audioCtx.state === 'suspended') {
-        audioCtx.resume();
-    }
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
     return audioCtx;
+}
+
+function onSelectModeClick(m) {
+    currentMode = m;
+    localStorage.setItem('last_mode_v5', m);
+    document.getElementById('modeOverlay').style.display = 'none';
+    document.getElementById('intervalTable').style.display = (m === 'interval') ? 'block' : 'none';
+    document.getElementById('generalTable').style.display = (m === 'general') ? 'block' : 'none';
+    openDbModal();
 }
 
 function selectMode(m) {
@@ -179,6 +225,7 @@ function resetMode() {
 }
 
 function init() {
+    initDatabases();
     const saved = localStorage.getItem(CONFIG_KEY);
     if(saved) try { Object.assign(config, JSON.parse(saved)); } catch(e){}
     if(!config.distRatio) config.distRatio = 100;
@@ -192,6 +239,11 @@ function init() {
     const lastM = localStorage.getItem('last_mode_v5');
     if(lastM) { selectMode(lastM); } else { resetMode(); }
     uiUpdate(); renderHistory();
+}
+
+function initDatabases() {
+    if (!localStorage.getItem(DB_INTERVAL_KEY)) localStorage.setItem(DB_INTERVAL_KEY, JSON.stringify(DEFAULT_DB_INTERVAL));
+    if (!localStorage.getItem(DB_GENERAL_KEY)) localStorage.setItem(DB_GENERAL_KEY, JSON.stringify(DEFAULT_DB_GENERAL));
 }
 
 function fillFormFromConfig() {
@@ -223,6 +275,7 @@ function uiUpdate() {
     if(document.getElementById('genDist')) config.genDist = +document.getElementById('genDist').value;
     if(document.getElementById('loopCount')) config.loops = +document.getElementById('loopCount').value;
     if(config.genSec > 0 && config.genDist > 0 && document.getElementById('genPaceText')) document.getElementById('genPaceText').innerText = formatTime(Math.floor(config.genSec/(config.genDist/1000)));
+    
     let tT = config.sec[0] + ((config.sec[1]+config.sec[2]+config.sec[3])*config.loops) + config.sec[4];
     let tD = config.dist[0] + ((config.dist[1]+config.dist[2]+config.dist[3])*config.loops) + config.dist[4];
     document.getElementById('totalPlanTime').innerText = (tT/60).toFixed(1);
@@ -230,38 +283,154 @@ function uiUpdate() {
     localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
 }
 
-function manualThresChange(v) {
-    let num = parseFloat(v);
-    if (!isNaN(num) && num > 0) {
-        config.threshold = num;
-        localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+// 資料庫 Modal 功能 (需求2)
+function openDbModal() {
+    document.getElementById('dbTitle').innerText = (currentMode === 'interval') ? "亞索800(間歇)資料庫" : "一般練跑資料庫";
+    renderDbList();
+    document.getElementById('dbModal').style.display = 'flex';
+}
+
+function closeDbModal() { document.getElementById('dbModal').style.display = 'none'; }
+
+function renderDbList() {
+    const listContainer = document.getElementById('dbList');
+    listContainer.innerHTML = "";
+    if (currentMode === 'interval') {
+        const db = JSON.parse(localStorage.getItem(DB_INTERVAL_KEY) || "[]");
+        db.forEach((entry, idx) => {
+            let div = document.createElement('div');
+            div.className = 'db-item';
+            let rowsHtml = entry.items.map((it, i) => {
+                let pace = (it.sec > 0 && it.dist > 0) ? formatTime(Math.floor(it.sec / (it.dist/1000))) : '--';
+                return `<tr>
+                    <td>${PHASES[i]}</td>
+                    <td><input type="number" value="${it.bpm}" onchange="updateDbItem('${idx}', ${i}, 'bpm', this.value)"></td>
+                    <td><input type="number" value="${it.sec}" onchange="updateDbItem('${idx}', ${i}, 'sec', this.value)"></td>
+                    <td><input type="number" value="${it.dist}" onchange="updateDbItem('${idx}', ${i}, 'dist', this.value)"></td>
+                    <td class="pace-text">${pace}</td>
+                </tr>`;
+            }).join('');
+            
+            div.innerHTML = `
+                <div class="db-header">
+                    <span><input type="text" value="${entry.name}" style="width:120px; font-weight:bold;" onchange="updateDbName('${idx}', this.value)"></span>
+                    <div>
+                        <button onclick="loadDbItem(${idx})" style="background:var(--success); color:white; border:none; padding:5px 10px; border-radius:5px; font-weight:bold; cursor:pointer;">直接載入</button>
+                        <button onclick="deleteDbItem(${idx})" style="background:var(--danger); color:white; border:none; padding:5px 8px; border-radius:5px; cursor:pointer;">刪除</button>
+                    </div>
+                </div>
+                <table>
+                    <thead><tr><th>階段</th><th>BPM</th><th>秒數</th><th>距離(m)</th><th>配速</th></tr></thead>
+                    <tbody>${rowsHtml}</tbody>
+                </table>
+            `;
+            listContainer.appendChild(div);
+        });
+    } else {
+        const db = JSON.parse(localStorage.getItem(DB_GENERAL_KEY) || "[]");
+        db.forEach((entry, idx) => {
+            let pace = (entry.sec > 0 && entry.dist > 0) ? formatTime(Math.floor(entry.sec / (entry.dist/1000))) : '--';
+            let div = document.createElement('div');
+            div.className = 'db-item';
+            div.innerHTML = `
+                <div class="db-header">
+                    <span><input type="text" value="${entry.name}" style="width:120px; font-weight:bold;" onchange="updateDbName('${idx}', this.value)"></span>
+                    <div>
+                        <button onclick="loadDbItem(${idx})" style="background:var(--success); color:white; border:none; padding:5px 10px; border-radius:5px; font-weight:bold; cursor:pointer;">直接載入</button>
+                        <button onclick="deleteDbItem(${idx})" style="background:var(--danger); color:white; border:none; padding:5px 8px; border-radius:5px; cursor:pointer;">刪除</button>
+                    </div>
+                </div>
+                <table>
+                    <thead><tr><th>BPM</th><th>秒數</th><th>距離(m)</th><th>配速</th></tr></thead>
+                    <tbody>
+                        <tr>
+                            <td><input type="number" value="${entry.bpm}" onchange="updateDbGen('${idx}', 'bpm', this.value)"></td>
+                            <td><input type="number" value="${entry.sec}" onchange="updateDbGen('${idx}', 'sec', this.value)"></td>
+                            <td><input type="number" value="${entry.dist}" onchange="updateDbGen('${idx}', 'dist', this.value)"></td>
+                            <td class="pace-text">${pace}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            `;
+            listContainer.appendChild(div);
+        });
     }
 }
 
-function adjThres(v) { 
-    config.threshold = Math.max(0.01, parseFloat((config.threshold + v).toFixed(2))); 
-    document.getElementById('thresInput').value = config.threshold.toFixed(2);
-    localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+function updateDbName(idx, val) {
+    let key = (currentMode === 'interval') ? DB_INTERVAL_KEY : DB_GENERAL_KEY;
+    let db = JSON.parse(localStorage.getItem(key));
+    db[idx].name = val;
+    localStorage.setItem(key, JSON.stringify(db));
 }
 
-function manualRatioChange(v) {
-    let num = parseInt(v);
-    if (!isNaN(num) && num > 0) {
-        config.distRatio = num;
-        localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+function updateDbItem(idx, phaseIdx, field, val) {
+    let db = JSON.parse(localStorage.getItem(DB_INTERVAL_KEY));
+    db[idx].items[phaseIdx][field] = Number(val);
+    localStorage.setItem(DB_INTERVAL_KEY, JSON.stringify(db));
+    renderDbList();
+}
+
+function updateDbGen(idx, field, val) {
+    let db = JSON.parse(localStorage.getItem(DB_GENERAL_KEY));
+    db[idx][field] = Number(val);
+    localStorage.setItem(DB_GENERAL_KEY, JSON.stringify(db));
+    renderDbList();
+}
+
+function loadDbItem(idx) {
+    if (currentMode === 'interval') {
+        let db = JSON.parse(localStorage.getItem(DB_INTERVAL_KEY));
+        let item = db[idx];
+        item.items.forEach((it, i) => {
+            config.bpm[i] = it.bpm;
+            config.sec[i] = it.sec;
+            config.dist[i] = it.dist;
+        });
+        if(item.loops) config.loops = item.loops;
+    } else {
+        let db = JSON.parse(localStorage.getItem(DB_GENERAL_KEY));
+        let item = db[idx];
+        config.genBPM = item.bpm;
+        config.genSec = item.sec;
+        config.genDist = item.dist;
     }
+    fillFormFromConfig();
+    uiUpdate();
+    closeDbModal();
 }
 
-function adjRatio(v) {
-    config.distRatio = Math.max(1, config.distRatio + v);
-    document.getElementById('ratioInput').value = config.distRatio;
-    localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+function addDbItem() {
+    if (currentMode === 'interval') {
+        let db = JSON.parse(localStorage.getItem(DB_INTERVAL_KEY));
+        db.push({ name: "自訂項目", items: [{bpm:180,sec:300,dist:500},{bpm:180,sec:300,dist:500},{bpm:180,sec:300,dist:500},{bpm:180,sec:300,dist:500},{bpm:180,sec:300,dist:500}], loops:1 });
+        localStorage.setItem(DB_INTERVAL_KEY, JSON.stringify(db));
+    } else {
+        let db = JSON.parse(localStorage.getItem(DB_GENERAL_KEY));
+        db.push({ name: "自訂項目", bpm: 180, sec: 1800, dist: 3000 });
+        localStorage.setItem(DB_GENERAL_KEY, JSON.stringify(db));
+    }
+    renderDbList();
 }
+
+function deleteDbItem(idx) {
+    let key = (currentMode === 'interval') ? DB_INTERVAL_KEY : DB_GENERAL_KEY;
+    let db = JSON.parse(localStorage.getItem(key));
+    db.splice(idx, 1);
+    localStorage.setItem(key, JSON.stringify(db));
+    renderDbList();
+}
+
+function manualThresChange(v) { let num = parseFloat(v); if (!isNaN(num) && num > 0) { config.threshold = num; localStorage.setItem(CONFIG_KEY, JSON.stringify(config)); } }
+function adjThres(v) { config.threshold = Math.max(0.01, parseFloat((config.threshold + v).toFixed(2))); document.getElementById('thresInput').value = config.threshold.toFixed(2); localStorage.setItem(CONFIG_KEY, JSON.stringify(config)); }
+function manualRatioChange(v) { let num = parseInt(v); if (!isNaN(num) && num > 0) { config.distRatio = num; localStorage.setItem(CONFIG_KEY, JSON.stringify(config)); } }
+function adjRatio(v) { config.distRatio = Math.max(1, config.distRatio + v); document.getElementById('ratioInput').value = config.distRatio; localStorage.setItem(CONFIG_KEY, JSON.stringify(config)); }
 
 async function toggleStart(isAuto) {
     if (isRunning) return; 
     isRunning = true; totalDist = 0; elapsedSec = 0; trackPoints = []; 
     lastDistCheck = 0; distStallCount = 0; lastKmDist = 0; lastKmSec = 0;
+    phasePaceStats = {}; // 重置極值記錄
     document.getElementById('trainingOverlay').style.display = 'flex';
     
     getAudioContext();
@@ -272,8 +441,24 @@ async function toggleStart(isAuto) {
         document.getElementById('bigElapsed').innerText = formatTime(elapsedSec);
         if(totalDist > 5) {
             document.getElementById('bigPaceAvg').innerText = formatTime(Math.floor(elapsedSec/(totalDist/1000)));
-            let curDiffDist = (totalDist - lastKmDist) / 1000, curDiffSec = elapsedSec - lastKmSec;
-            if(curDiffDist > 0.005) document.getElementById('bigPaceCur').innerText = formatTime(Math.floor(curDiffSec/curDiffDist));
+            
+            // 需求3：階段配速與極值記錄
+            let pDiffDist = (totalDist - phaseStartDist) / 1000;
+            let pDiffSec = elapsedSec - phaseStartSec;
+            if (pDiffDist > 0.003 && pDiffSec > 0) {
+                let curPhasePaceSec = Math.floor(pDiffSec / pDiffDist);
+                document.getElementById('bigPaceCur').innerText = formatTime(curPhasePaceSec);
+                
+                if (currentPhaseName) {
+                    if (!phasePaceStats[currentPhaseName]) {
+                        phasePaceStats[currentPhaseName] = { minSec: curPhasePaceSec, maxSec: curPhasePaceSec };
+                    } else {
+                        // 最快配速 = 秒數較小, 最慢配速 = 秒數較大
+                        if (curPhasePaceSec < phasePaceStats[currentPhaseName].minSec) phasePaceStats[currentPhaseName].minSec = curPhasePaceSec;
+                        if (curPhasePaceSec > phasePaceStats[currentPhaseName].maxSec) phasePaceStats[currentPhaseName].maxSec = curPhasePaceSec;
+                    }
+                }
+            }
         }
         if (totalDist <= lastDistCheck && elapsedSec > 10) { 
             distStallCount++; 
@@ -286,20 +471,23 @@ async function toggleStart(isAuto) {
 
     try {
         if(currentMode === 'interval') {
-            await runPhase("熱身", config.sec[0], config.bpm[0]);
+            await runPhase("1階", config.sec[0], config.bpm[0]);
             for(let j=0; j<config.loops; j++) {
                 if(!isRunning) break;
-                await runPhase(`間歇(${j+1}/${config.loops})`, config.sec[1], config.bpm[1]);
-                await runPhase(`衝刺(${j+1}/${config.loops})`, config.sec[2], config.bpm[2]);
-                await runPhase(`恢復(${j+1}/${config.loops})`, config.sec[3], config.bpm[3]);
+                await runPhase("2階", config.sec[1], config.bpm[1]);
+                await runPhase("3階", config.sec[2], config.bpm[2]);
+                await runPhase("4階", config.sec[3], config.bpm[3]);
             }
-            if(isRunning) await runPhase("舒緩", config.sec[4], config.bpm[4]);
+            if(isRunning) await runPhase("5階", config.sec[4], config.bpm[4]);
             
             if(isRunning) {
                 if (isAuto) {
                     stopAndSave(); 
                 } else {
                     document.getElementById('statusTop').innerText = "● 續跑中";
+                    currentPhaseName = "續跑";
+                    phaseStartDist = totalDist;
+                    phaseStartSec = elapsedSec;
                     while(isRunning) {
                         document.getElementById('phaseDetail').innerText = `亞索達標 | 續跑中...`;
                         await new Promise(r => setTimeout(r, 1000));
@@ -310,6 +498,9 @@ async function toggleStart(isAuto) {
             document.getElementById('statusTop').innerText = "● 一般練跑";
             currentRunningBPM = config.genBPM;
             document.getElementById('liveBPM').innerText = currentRunningBPM;
+            currentPhaseName = "一般";
+            phaseStartDist = totalDist;
+            phaseStartSec = elapsedSec;
             
             let targetSec = config.genSec;
             while(isRunning) {
@@ -354,6 +545,10 @@ function runPhase(label, sec, bpm) {
         currentRunningBPM = bpm;
         document.getElementById('liveBPM').innerText = currentRunningBPM;
         currentSoundType = !currentSoundType;
+        
+        currentPhaseName = label;
+        phaseStartDist = totalDist;
+        phaseStartSec = elapsedSec;
         
         let remSec = sec;
         let phaseTimer = setInterval(() => {
@@ -467,6 +662,12 @@ function startGPS() {
     }, null, {enableHighAccuracy:true});
 }
 
+function formatPaceStr(sec) {
+    let m = Math.floor(sec / 60);
+    let s = Math.floor(sec % 60).toString().padStart(2, '0');
+    return `${m}’${s}`;
+}
+
 function stopAndSave() {
     if (!isRunning) return;
     isRunning = false; 
@@ -488,6 +689,20 @@ function stopAndSave() {
         }
     }
 
+    // 需求4：格式化輸出各階段最慢與最快配速
+    let paceDetailLines = [];
+    Object.keys(phasePaceStats).forEach(pKey => {
+        let st = phasePaceStats[pKey];
+        if (st && st.minSec !== Infinity && st.maxSec !== 0) {
+            let fastStr = formatPaceStr(st.minSec);
+            let slowStr = formatPaceStr(st.maxSec);
+            paceDetailLines.push(`${pKey}：${fastStr}~${slowStr}`);
+        }
+    });
+
+    let paceStrText = paceDetailLines.join('\n');
+    let autoNote = `📍地點：${startNote.location}\n🌡氣候：${startNote.weather}\n⚙️門檻：${config.threshold.toFixed(2)}m` + (paceStrText ? `\n${paceStrText}` : ``);
+
     const runInfo = {
         id: Date.now(), 
         date: new Date().toLocaleString(), 
@@ -495,7 +710,7 @@ function stopAndSave() {
         time: formatTime(elapsedSec), 
         points: optimizedPoints, 
         mode: currentMode, 
-        note: `📍地點：${startNote.location}\n🌡氣候：${startNote.weather}\n⚙️門檻：${config.threshold.toFixed(2)}m | 比例：${config.distRatio}%`
+        note: autoNote
     };
 
     if(totalDist > 0) {
