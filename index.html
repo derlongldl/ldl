@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>跑步教練 V6.0.0</title>
+<title>跑步教練 V9.1.0</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -92,15 +92,15 @@ input[type="number"], input[type="text"] { width: 90%; padding: 6px 0; text-alig
 </div>
 
 <div class="card">
-  <h2>跑步教練 V6.0.0</h2>
+  <h2>跑步教練 V6.1.0</h2>
   <div>
       <table>
         <thead><tr><th>階段</th><th>BPM</th><th>秒數</th><th>距離(m)</th><th>跑速</th></tr></thead>
         <tbody id="configRows"></tbody>
       </table>
-      <div class="control-row" style="display:flex; justify-content:space-between; margin:10px 0;">
-        <span>循環：<input id="loopCount" type="number" oninput="uiUpdate()" style="width:40px;"> 組</span>
-        <span style="font-size:12px;">預計：<b id="totalPlanTime">0</b>分 / <b id="totalPlanDist">0</b>km</span>
+      <div class="control-row" style="display:flex; justify-content:space-between; align-items:center; margin:10px 0; font-size:12px;">
+        <span>循環：<input id="loopStart" type="number" oninput="uiUpdate()" style="width:30px; padding:2px;">階至<input id="loopEnd" type="number" oninput="uiUpdate()" style="width:30px; padding:2px;">階，<input id="loopCount" type="number" oninput="uiUpdate()" style="width:35px; padding:2px;">組</span>
+        <span>預計：<b id="totalPlanTime">0</b>分 / <b id="totalPlanDist">0</b>km</span>
       </div>
   </div>
 
@@ -138,9 +138,9 @@ input[type="number"], input[type="text"] { width: 90%; padding: 6px 0; text-alig
 <div class="card"><strong>歷史紀錄</strong><div id="historyContainer"></div></div>
 
 <script>
-const CONFIG_KEY = 'run_config_v600';
-const HISTORY_KEY = 'run_history_v600';
-const DB_KEY = 'run_db_v600';
+const CONFIG_KEY = 'run_config_v610';
+const HISTORY_KEY = 'run_history_v610';
+const DB_KEY = 'run_db_v610';
 
 let isRunning = false, totalDist = 0, elapsedSec = 0;
 let audioCtx = null, timerId = null, watchId = null, trackPoints = [];
@@ -158,6 +158,8 @@ let config = {
         { bpm:190, sec:945, dist:3000 },
         { bpm:190, sec:300, dist:1000 }
     ],
+    loopStart: 1,
+    loopEnd: 5,
     loops: 1,
     threshold: 1.81,
     distRatio: 100,
@@ -166,18 +168,17 @@ let config = {
 
 // 階段配速統計變數
 let currentPhaseName = "";
-let currentPhaseIndex = -1;
 let currentLoopIndex = 0;
 let phaseRecords = []; // 儲存每次進階段的數據： { phaseName, loopIdx, sec, dist }
 let currentPhaseStartDist = 0, currentPhaseStartSec = 0;
 
 // 預設資料庫
 const DEFAULT_DB = [
-    { name: "6K輕鬆跑", items: [{bpm:180,sec:420,dist:1000},{bpm:180,sec:390,dist:1000},{bpm:180,sec:390,dist:1000},{bpm:180,sec:390,dist:1000},{bpm:180,sec:390,dist:1000}], loops:1 },
-    { name: "漸速跑10K", items: [{bpm:180,sec:420,dist:1000},{bpm:180,sec:1080,dist:3000},{bpm:185,sec:1005,dist:3000},{bpm:190,sec:945,dist:3000},{bpm:190,sec:300,dist:1000}], loops:1 },
-    { name: "亞索800", items: [{bpm:180,sec:180,dist:400},{bpm:190,sec:115,dist:400},{bpm:190,sec:115,dist:400},{bpm:180,sec:180,dist:400},{bpm:180,sec:180,dist:400}], loops:5 },
-    { name: "旋轉功", items: [{bpm:180,sec:2400,dist:3500}], loops:1 },
-    { name: "恢復跑7K", items: [{bpm:180,sec:3000,dist:7000}], loops:1 }
+    { name: "6K輕鬆跑", items: [{bpm:180,sec:420,dist:1000},{bpm:180,sec:390,dist:1000},{bpm:180,sec:390,dist:1000},{bpm:180,sec:390,dist:1000},{bpm:180,sec:390,dist:1000}], loopStart:1, loopEnd:5, loops:1 },
+    { name: "漸速跑10K", items: [{bpm:180,sec:420,dist:1000},{bpm:180,sec:1080,dist:3000},{bpm:185,sec:1005,dist:3000},{bpm:190,sec:945,dist:3000},{bpm:190,sec:300,dist:1000}], loopStart:1, loopEnd:5, loops:1 },
+    { name: "亞索800", items: [{bpm:180,sec:180,dist:400},{bpm:190,sec:115,dist:400},{bpm:190,sec:115,dist:400},{bpm:180,sec:180,dist:400},{bpm:180,sec:180,dist:400}], loopStart:2, loopEnd:3, loops:5 },
+    { name: "旋轉功", items: [{bpm:180,sec:2400,dist:3500}], loopStart:1, loopEnd:1, loops:1 },
+    { name: "恢復跑7K", items: [{bpm:180,sec:3000,dist:7000}], loopStart:1, loopEnd:1, loops:1 }
 ];
 
 function getAudioContext() {
@@ -220,6 +221,8 @@ function renderMainTable() {
 }
 
 function fillSettingsForm() {
+    if(document.getElementById('loopStart')) document.getElementById('loopStart').value = config.loopStart || 1;
+    if(document.getElementById('loopEnd')) document.getElementById('loopEnd').value = config.loopEnd || config.items.length;
     if(document.getElementById('loopCount')) document.getElementById('loopCount').value = config.loops || 1;
     if(document.getElementById('thresInput')) document.getElementById('thresInput').value = config.threshold.toFixed(2);
     if(document.getElementById('ratioInput')) document.getElementById('ratioInput').value = config.distRatio;
@@ -238,13 +241,37 @@ function uiUpdate() {
             if(pEl) pEl.innerText = formatTime(Math.floor(it.sec / (it.dist/1000)));
         }
     });
-    if(document.getElementById('loopCount')) config.loops = Math.max(1, +document.getElementById('loopCount').value);
+
+    let totalPhases = config.items.length;
+    let lStart = document.getElementById('loopStart') ? Math.max(1, Math.min(totalPhases, +document.getElementById('loopStart').value)) : 1;
+    let lEnd = document.getElementById('loopEnd') ? Math.max(lStart, Math.min(totalPhases, +document.getElementById('loopEnd').value)) : totalPhases;
+    let lCount = document.getElementById('loopCount') ? Math.max(1, +document.getElementById('loopCount').value) : 1;
+
+    config.loopStart = lStart;
+    config.loopEnd = lEnd;
+    config.loops = lCount;
+
+    // 計算預計時間與距離（包含前置非循環、中間循環、後置非循環階段）
+    let totalPlanSec = 0, totalPlanDist = 0;
     
-    let singleLoopSec = config.items.reduce((sum, item) => sum + item.sec, 0);
-    let singleLoopDist = config.items.reduce((sum, item) => sum + item.dist, 0);
-    
-    let totalPlanSec = singleLoopSec * config.loops;
-    let totalPlanDist = singleLoopDist * config.loops;
+    // 循環前
+    for (let i = 0; i < lStart - 1; i++) {
+        totalPlanSec += config.items[i].sec;
+        totalPlanDist += config.items[i].dist;
+    }
+    // 循環段
+    let loopSec = 0, loopDist = 0;
+    for (let i = lStart - 1; i < lEnd; i++) {
+        loopSec += config.items[i].sec;
+        loopDist += config.items[i].dist;
+    }
+    totalPlanSec += loopSec * lCount;
+    totalPlanDist += loopDist * lCount;
+    // 循環後
+    for (let i = lEnd; i < totalPhases; i++) {
+        totalPlanSec += config.items[i].sec;
+        totalPlanDist += config.items[i].dist;
+    }
     
     document.getElementById('totalPlanTime').innerText = (totalPlanSec / 60).toFixed(1);
     document.getElementById('totalPlanDist').innerText = (totalPlanDist / 1000).toFixed(2);
@@ -296,9 +323,9 @@ function renderDbList() {
                 <thead><tr><th style="width:25%;">階段</th><th>BPM</th><th>秒數</th><th>距離(m)</th><th>配速</th></tr></thead>
                 <tbody>${rowsHtml}</tbody>
             </table>
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; font-size:12px;">
                 <button onclick="addDbPhase(${idx})" style="padding:4px 8px; background:var(--info); color:white; border:none; border-radius:4px; font-size:12px; cursor:pointer;">＋ 新增階段</button>
-                <span style="font-size:12px;">循環組數：<input type="number" value="${entry.loops||1}" style="width:40px; padding:2px;" onchange="updateDbLoops(${idx}, this.value)"> 組</span>
+                <span>循環：<input type="number" value="${entry.loopStart||1}" style="width:30px; padding:2px;" onchange="updateDbLoopRange(${idx}, 'loopStart', this.value)">階~<input type="number" value="${entry.loopEnd||entry.items.length}" style="width:30px; padding:2px;" onchange="updateDbLoopRange(${idx}, 'loopEnd', this.value)">階，<input type="number" value="${entry.loops||1}" style="width:35px; padding:2px;" onchange="updateDbLoopRange(${idx}, 'loops', this.value)">組</span>
             </div>
         `;
         listContainer.appendChild(div);
@@ -311,10 +338,11 @@ function updateDbName(idx, val) {
     localStorage.setItem(DB_KEY, JSON.stringify(db));
 }
 
-function updateDbLoops(idx, val) {
+function updateDbLoopRange(idx, field, val) {
     let db = JSON.parse(localStorage.getItem(DB_KEY));
-    db[idx].loops = Math.max(1, Number(val));
+    db[idx][field] = Math.max(1, Number(val));
     localStorage.setItem(DB_KEY, JSON.stringify(db));
+    renderDbList();
 }
 
 function updateDbItem(idx, phaseIdx, field, val) {
@@ -327,6 +355,7 @@ function updateDbItem(idx, phaseIdx, field, val) {
 function addDbPhase(idx) {
     let db = JSON.parse(localStorage.getItem(DB_KEY));
     db[idx].items.push({ bpm: 180, sec: 300, dist: 500 });
+    db[idx].loopEnd = db[idx].items.length;
     localStorage.setItem(DB_KEY, JSON.stringify(db));
     renderDbList();
 }
@@ -338,6 +367,8 @@ function deleteDbPhase(idx, phaseIdx) {
         return;
     }
     db[idx].items.splice(phaseIdx, 1);
+    if (db[idx].loopEnd > db[idx].items.length) db[idx].loopEnd = db[idx].items.length;
+    if (db[idx].loopStart > db[idx].items.length) db[idx].loopStart = db[idx].items.length;
     localStorage.setItem(DB_KEY, JSON.stringify(db));
     renderDbList();
 }
@@ -346,6 +377,8 @@ function loadDbItem(idx) {
     let db = JSON.parse(localStorage.getItem(DB_KEY));
     let item = db[idx];
     config.items = JSON.parse(JSON.stringify(item.items));
+    config.loopStart = item.loopStart || 1;
+    config.loopEnd = item.loopEnd || config.items.length;
     config.loops = item.loops || 1;
     
     renderMainTable();
@@ -359,6 +392,8 @@ function addDbItem() {
     db.push({ 
         name: "新預設計畫", 
         items: [{ bpm: 180, sec: 300, dist: 500 }], 
+        loopStart: 1,
+        loopEnd: 1,
         loops: 1 
     });
     localStorage.setItem(DB_KEY, JSON.stringify(db));
@@ -415,16 +450,33 @@ async function toggleStart(isAuto) {
     runBeepLoop();
 
     try {
-        let loops = config.loops || 1;
-        for (let l = 0; l < loops; l++) {
+        let lStart = config.loopStart - 1; // 轉為 0-based index
+        let lEnd = config.loopEnd - 1;
+        let lCount = config.loops || 1;
+
+        // 1. 跑循環前階段 (0 到 lStart - 1)
+        for (let i = 0; i < lStart; i++) {
+            if (!isRunning) break;
+            let item = config.items[i];
+            await runPhase(`${i+1}階`, item.sec, item.bpm, 0, 1);
+        }
+
+        // 2. 跑指定範圍的循環階段 (lStart 到 lEnd)
+        for (let l = 0; l < lCount; l++) {
             if (!isRunning) break;
             currentLoopIndex = l;
-            for (let i = 0; i < config.items.length; i++) {
+            for (let i = lStart; i <= lEnd; i++) {
                 if (!isRunning) break;
                 let item = config.items[i];
-                let phaseLabel = `${i+1}階`;
-                await runPhase(phaseLabel, item.sec, item.bpm, l);
+                await runPhase(`${i+1}階`, item.sec, item.bpm, l, lCount);
             }
+        }
+
+        // 3. 跑循環後階段 (lEnd + 1 到 最後一階)
+        for (let i = lEnd + 1; i < config.items.length; i++) {
+            if (!isRunning) break;
+            let item = config.items[i];
+            await runPhase(`${i+1}階`, item.sec, item.bpm, 0, 1);
         }
         
         if(isRunning) {
@@ -456,11 +508,10 @@ async function runBeepLoop() {
     }
 }
 
-function runPhase(label, sec, bpm, loopIdx) {
+function runPhase(label, sec, bpm, loopIdx, totalLoops) {
     return new Promise((resolve) => {
         if(!isRunning) return resolve();
         
-        // 紀錄前一階段跑完時的成績
         if (currentPhaseName !== "") {
             recordPhaseResult();
         }
@@ -481,7 +532,7 @@ function runPhase(label, sec, bpm, loopIdx) {
                 return resolve();
             }
             remSec--;
-            let loopText = (config.loops > 1) ? ` (第${loopIdx+1}/${config.loops}組)` : '';
+            let loopText = (totalLoops > 1) ? ` (組${loopIdx+1}/${totalLoops})` : '';
             document.getElementById('phaseDetail').innerText = `節拍:${currentRunningBPM}${loopText} | 剩:${remSec}s`;
             if (remSec <= 0) {
                 clearInterval(phaseTimer);
@@ -613,7 +664,6 @@ function stopAndSave() {
     timerId = null; 
     navigator.geolocation.clearWatch(watchId);
     
-    // 儲存最後一個尚未結束的階段成績
     if (currentPhaseName !== "") {
         recordPhaseResult();
     }
@@ -632,9 +682,7 @@ function stopAndSave() {
         }
     }
 
-    // 需求 2：計算各階段平均配速（若組數>1，紀錄最快~最慢組平均配速）
     let paceDetailLines = calculatePaceSummary(phaseRecords);
-
     let paceStrText = paceDetailLines.join('\n');
     let autoNote = `📍地點：${startNote.location}\n🌡氣候：${startNote.weather}\n⚙️門檻：${config.threshold.toFixed(2)}m` + (paceStrText ? `\n${paceStrText}` : ``);
 
@@ -670,11 +718,9 @@ function stopAndSave() {
     }
 }
 
-// 根據 phaseRecords 計算結果
 function calculatePaceSummary(records) {
     if (records.length === 0) return [];
 
-    // 先依照 phaseName 分組
     let groups = {};
     records.forEach(r => {
         if (!groups[r.name]) groups[r.name] = [];
@@ -685,14 +731,12 @@ function calculatePaceSummary(records) {
     Object.keys(groups).forEach(pName => {
         let items = groups[pName];
         if (items.length === 1) {
-            // 單組：計算該階平均配速
             let avgPaceSec = items[0].sec / (items[0].dist / 1000);
             lines.push(`${pName}：${formatPaceStr(avgPaceSec)}`);
         } else {
-            // 多組（組數 > 1）：計算各組平均配速，找出【最快組】與【最慢組】
             let paces = items.map(it => it.sec / (it.dist / 1000));
-            let minPace = Math.min(...paces); // 最快平均配速（秒數小）
-            let maxPace = Math.max(...paces); // 最慢平均配速（秒數大）
+            let minPace = Math.min(...paces);
+            let maxPace = Math.max(...paces);
             lines.push(`${pName}：${formatPaceStr(minPace)}~${formatPaceStr(maxPace)}`);
         }
     });
