@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>跑步教練 V9.1.0</title>
+<title>跑步教練 V9.1.1</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -49,7 +49,7 @@ input[type="number"], input[type="text"] { width: 90%; padding: 6px 0; text-alig
 <!-- 資料庫選擇與維護 Modal -->
 <div id="dbModal">
     <div class="note-box">
-        <h3 style="margin-top:0; color:var(--primary); text-align:center;">計畫資料庫</h3>
+        <h3 style="margin-top:0; color:var(--primary); text-align:center;">跑步計畫資料庫</h3>
         <div id="dbList"></div>
         <button onclick="addDbItem()" style="width:100%; padding:10px; background:var(--info); color:white; border:none; border-radius:8px; font-weight:bold; margin-bottom:10px;">＋ 新增預設資料</button>
         <button onclick="closeDbModal()" style="width:100%; padding:10px; background:#888; color:white; border:none; border-radius:8px;">關閉</button>
@@ -70,7 +70,7 @@ input[type="number"], input[type="text"] { width: 90%; padding: 6px 0; text-alig
     <div style="display:flex; width:100%; justify-content:space-around; margin: 10px 0; text-align:center;">
         <div><div style="color:#888; font-size:0.8rem;">平均配速</div><div id="bigPaceAvg" style="font-size:1.8rem; font-family:monospace;">--:--</div></div>
         <div><div style="color:#ffeb3b; font-size:0.8rem;">階段配速</div><div id="bigPaceCur" style="font-size:1.8rem; font-family:monospace; color:#ffeb3b;">--:--</div></div>
-        <div><div style="color:#888; font-size:0.8rem;">時間</div><div id="bigElapsed" style="font-size:1.8rem; font-family:monospace;">00:00</div></div>
+        <div><div style="color:#888; font-size:0.8rem;">跑步時間</div><div id="bigElapsed" style="font-size:1.8rem; font-family:monospace;">00:00</div></div>
     </div>
 
     <div class="bpm-control">
@@ -92,7 +92,7 @@ input[type="number"], input[type="text"] { width: 90%; padding: 6px 0; text-alig
 </div>
 
 <div class="card">
-  <h2>跑步教練 V9.1.0</h2>
+  <h2>跑步教練 V9.1.1</h2>
   <div>
       <table>
         <thead><tr><th>階段</th><th>BPM</th><th>秒數</th><th>距離(m)</th><th>跑速</th></tr></thead>
@@ -138,9 +138,9 @@ input[type="number"], input[type="text"] { width: 90%; padding: 6px 0; text-alig
 <div class="card"><strong>歷史紀錄</strong><div id="historyContainer"></div></div>
 
 <script>
-const CONFIG_KEY = 'run_config_v610';
-const HISTORY_KEY = 'run_history_v610';
-const DB_KEY = 'run_db_v610';
+const CONFIG_KEY = 'run_config_v911';
+const HISTORY_KEY = 'run_history_v911';
+const DB_KEY = 'run_db_v911';
 
 let isRunning = false, totalDist = 0, elapsedSec = 0;
 let audioCtx = null, timerId = null, watchId = null, trackPoints = [];
@@ -149,7 +149,6 @@ let startNote = { location: "偵測中", weather: "偵測中" };
 let lastKmDist = 0, lastKmSec = 0, currentRunningBPM = 180;
 let holdTimer = null, holdPercent = 0;
 
-// 當前執行的設定
 let config = {
     items: [
         { bpm:180, sec:420, dist:1000 },
@@ -166,13 +165,11 @@ let config = {
     alarmOn: true
 };
 
-// 階段配速統計變數
 let currentPhaseName = "";
 let currentLoopIndex = 0;
-let phaseRecords = []; // 儲存每次進階段的數據： { phaseName, loopIdx, sec, dist }
+let phaseRecords = [];
 let currentPhaseStartDist = 0, currentPhaseStartSec = 0;
 
-// 預設資料庫
 const DEFAULT_DB = [
     { name: "6K輕鬆跑", items: [{bpm:180,sec:420,dist:1000},{bpm:180,sec:390,dist:1000},{bpm:180,sec:390,dist:1000},{bpm:180,sec:390,dist:1000},{bpm:180,sec:390,dist:1000}], loopStart:1, loopEnd:5, loops:1 },
     { name: "漸速跑10K", items: [{bpm:180,sec:420,dist:1000},{bpm:180,sec:1080,dist:3000},{bpm:185,sec:1005,dist:3000},{bpm:190,sec:945,dist:3000},{bpm:190,sec:300,dist:1000}], loopStart:1, loopEnd:5, loops:1 },
@@ -251,15 +248,11 @@ function uiUpdate() {
     config.loopEnd = lEnd;
     config.loops = lCount;
 
-    // 計算預計時間與距離（包含前置非循環、中間循環、後置非循環階段）
     let totalPlanSec = 0, totalPlanDist = 0;
-    
-    // 循環前
     for (let i = 0; i < lStart - 1; i++) {
         totalPlanSec += config.items[i].sec;
         totalPlanDist += config.items[i].dist;
     }
-    // 循環段
     let loopSec = 0, loopDist = 0;
     for (let i = lStart - 1; i < lEnd; i++) {
         loopSec += config.items[i].sec;
@@ -267,7 +260,6 @@ function uiUpdate() {
     }
     totalPlanSec += loopSec * lCount;
     totalPlanDist += loopDist * lCount;
-    // 循環後
     for (let i = lEnd; i < totalPhases; i++) {
         totalPlanSec += config.items[i].sec;
         totalPlanDist += config.items[i].dist;
@@ -278,15 +270,8 @@ function uiUpdate() {
     localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
 }
 
-// ---------------- DB Modal 功能 ----------------
-function openDbModal() {
-    renderDbList();
-    document.getElementById('dbModal').style.display = 'flex';
-}
-
-function closeDbModal() { 
-    document.getElementById('dbModal').style.display = 'none'; 
-}
+function openDbModal() { renderDbList(); document.getElementById('dbModal').style.display = 'flex'; }
+function closeDbModal() { document.getElementById('dbModal').style.display = 'none'; }
 
 function renderDbList() {
     const listContainer = document.getElementById('dbList');
@@ -296,7 +281,6 @@ function renderDbList() {
     db.forEach((entry, idx) => {
         let div = document.createElement('div');
         div.className = 'db-item';
-        
         let rowsHtml = entry.items.map((it, i) => {
             let pace = (it.sec > 0 && it.dist > 0) ? formatTime(Math.floor(it.sec / (it.dist/1000))) : '--';
             return `<tr>
@@ -332,94 +316,26 @@ function renderDbList() {
     });
 }
 
-function updateDbName(idx, val) {
-    let db = JSON.parse(localStorage.getItem(DB_KEY));
-    db[idx].name = val;
-    localStorage.setItem(DB_KEY, JSON.stringify(db));
-}
+function updateDbName(idx, val) { let db = JSON.parse(localStorage.getItem(DB_KEY)); db[idx].name = val; localStorage.setItem(DB_KEY, JSON.stringify(db)); }
+function updateDbLoopRange(idx, field, val) { let db = JSON.parse(localStorage.getItem(DB_KEY)); db[idx][field] = Math.max(1, Number(val)); localStorage.setItem(DB_KEY, JSON.stringify(db)); renderDbList(); }
+function updateDbItem(idx, phaseIdx, field, val) { let db = JSON.parse(localStorage.getItem(DB_KEY)); db[idx].items[phaseIdx][field] = Number(val); localStorage.setItem(DB_KEY, JSON.stringify(db)); renderDbList(); }
+function addDbPhase(idx) { let db = JSON.parse(localStorage.getItem(DB_KEY)); db[idx].items.push({ bpm: 180, sec: 300, dist: 500 }); db[idx].loopEnd = db[idx].items.length; localStorage.setItem(DB_KEY, JSON.stringify(db)); renderDbList(); }
+function deleteDbPhase(idx, phaseIdx) { let db = JSON.parse(localStorage.getItem(DB_KEY)); if (db[idx].items.length <= 1) { alert("至少需要保留一個階段！"); return; } db[idx].items.splice(phaseIdx, 1); if (db[idx].loopEnd > db[idx].items.length) db[idx].loopEnd = db[idx].items.length; if (db[idx].loopStart > db[idx].items.length) db[idx].loopStart = db[idx].items.length; localStorage.setItem(DB_KEY, JSON.stringify(db)); renderDbList(); }
+function loadDbItem(idx) { let db = JSON.parse(localStorage.getItem(DB_KEY)); let item = db[idx]; config.items = JSON.parse(JSON.stringify(item.items)); config.loopStart = item.loopStart || 1; config.loopEnd = item.loopEnd || config.items.length; config.loops = item.loops || 1; renderMainTable(); fillSettingsForm(); uiUpdate(); closeDbModal(); }
+function addDbItem() { let db = JSON.parse(localStorage.getItem(DB_KEY)); db.push({ name: "新預設計畫", items: [{ bpm: 180, sec: 300, dist: 500 }], loopStart: 1, loopEnd: 1, loops: 1 }); localStorage.setItem(DB_KEY, JSON.stringify(db)); renderDbList(); }
+function deleteDbItem(idx) { if(!confirm("確定要刪除這筆預設計畫？")) return; let db = JSON.parse(localStorage.getItem(DB_KEY)); db.splice(idx, 1); localStorage.setItem(DB_KEY, JSON.stringify(db)); renderDbList(); }
 
-function updateDbLoopRange(idx, field, val) {
-    let db = JSON.parse(localStorage.getItem(DB_KEY));
-    db[idx][field] = Math.max(1, Number(val));
-    localStorage.setItem(DB_KEY, JSON.stringify(db));
-    renderDbList();
-}
-
-function updateDbItem(idx, phaseIdx, field, val) {
-    let db = JSON.parse(localStorage.getItem(DB_KEY));
-    db[idx].items[phaseIdx][field] = Number(val);
-    localStorage.setItem(DB_KEY, JSON.stringify(db));
-    renderDbList();
-}
-
-function addDbPhase(idx) {
-    let db = JSON.parse(localStorage.getItem(DB_KEY));
-    db[idx].items.push({ bpm: 180, sec: 300, dist: 500 });
-    db[idx].loopEnd = db[idx].items.length;
-    localStorage.setItem(DB_KEY, JSON.stringify(db));
-    renderDbList();
-}
-
-function deleteDbPhase(idx, phaseIdx) {
-    let db = JSON.parse(localStorage.getItem(DB_KEY));
-    if (db[idx].items.length <= 1) {
-        alert("至少需要保留一個階段！");
-        return;
-    }
-    db[idx].items.splice(phaseIdx, 1);
-    if (db[idx].loopEnd > db[idx].items.length) db[idx].loopEnd = db[idx].items.length;
-    if (db[idx].loopStart > db[idx].items.length) db[idx].loopStart = db[idx].items.length;
-    localStorage.setItem(DB_KEY, JSON.stringify(db));
-    renderDbList();
-}
-
-function loadDbItem(idx) {
-    let db = JSON.parse(localStorage.getItem(DB_KEY));
-    let item = db[idx];
-    config.items = JSON.parse(JSON.stringify(item.items));
-    config.loopStart = item.loopStart || 1;
-    config.loopEnd = item.loopEnd || config.items.length;
-    config.loops = item.loops || 1;
-    
-    renderMainTable();
-    fillSettingsForm();
-    uiUpdate();
-    closeDbModal();
-}
-
-function addDbItem() {
-    let db = JSON.parse(localStorage.getItem(DB_KEY));
-    db.push({ 
-        name: "新預設計畫", 
-        items: [{ bpm: 180, sec: 300, dist: 500 }], 
-        loopStart: 1,
-        loopEnd: 1,
-        loops: 1 
-    });
-    localStorage.setItem(DB_KEY, JSON.stringify(db));
-    renderDbList();
-}
-
-function deleteDbItem(idx) {
-    if(!confirm("確定要刪除這筆預設計畫？")) return;
-    let db = JSON.parse(localStorage.getItem(DB_KEY));
-    db.splice(idx, 1);
-    localStorage.setItem(DB_KEY, JSON.stringify(db));
-    renderDbList();
-}
-
-// ---------------- 設定調整 ----------------
 function manualThresChange(v) { let num = parseFloat(v); if (!isNaN(num) && num > 0) { config.threshold = num; localStorage.setItem(CONFIG_KEY, JSON.stringify(config)); } }
 function adjThres(v) { config.threshold = Math.max(0.01, parseFloat((config.threshold + v).toFixed(2))); document.getElementById('thresInput').value = config.threshold.toFixed(2); localStorage.setItem(CONFIG_KEY, JSON.stringify(config)); }
 function manualRatioChange(v) { let num = parseInt(v); if (!isNaN(num) && num > 0) { config.distRatio = num; localStorage.setItem(CONFIG_KEY, JSON.stringify(config)); } }
 function adjRatio(v) { config.distRatio = Math.max(1, config.distRatio + v); document.getElementById('ratioInput').value = config.distRatio; localStorage.setItem(CONFIG_KEY, JSON.stringify(config)); }
 
-// ---------------- 跑步主流程 ----------------
 async function toggleStart(isAuto) {
     if (isRunning) return; 
     isRunning = true; totalDist = 0; elapsedSec = 0; trackPoints = []; 
     lastDistCheck = 0; distStallCount = 0; lastKmDist = 0; lastKmSec = 0;
     phaseRecords = [];
+    currentPhaseName = "";
     
     document.getElementById('trainingOverlay').style.display = 'flex';
     getAudioContext();
@@ -450,18 +366,18 @@ async function toggleStart(isAuto) {
     runBeepLoop();
 
     try {
-        let lStart = config.loopStart - 1; // 轉為 0-based index
+        let lStart = config.loopStart - 1;
         let lEnd = config.loopEnd - 1;
         let lCount = config.loops || 1;
 
-        // 1. 跑循環前階段 (0 到 lStart - 1)
+        // 1. 跑循環前階段
         for (let i = 0; i < lStart; i++) {
             if (!isRunning) break;
             let item = config.items[i];
             await runPhase(`${i+1}階`, item.sec, item.bpm, 0, 1);
         }
 
-        // 2. 跑指定範圍的循環階段 (lStart 到 lEnd)
+        // 2. 跑指定範圍的循環階段
         for (let l = 0; l < lCount; l++) {
             if (!isRunning) break;
             currentLoopIndex = l;
@@ -472,7 +388,7 @@ async function toggleStart(isAuto) {
             }
         }
 
-        // 3. 跑循環後階段 (lEnd + 1 到 最後一階)
+        // 3. 跑循環後階段
         for (let i = lEnd + 1; i < config.items.length; i++) {
             if (!isRunning) break;
             let item = config.items[i];
@@ -511,10 +427,6 @@ async function runBeepLoop() {
 function runPhase(label, sec, bpm, loopIdx, totalLoops) {
     return new Promise((resolve) => {
         if(!isRunning) return resolve();
-        
-        if (currentPhaseName !== "") {
-            recordPhaseResult();
-        }
 
         document.getElementById('statusTop').innerText = "● " + label;
         currentRunningBPM = bpm;
@@ -536,6 +448,8 @@ function runPhase(label, sec, bpm, loopIdx, totalLoops) {
             document.getElementById('phaseDetail').innerText = `節拍:${currentRunningBPM}${loopText} | 剩:${remSec}s`;
             if (remSec <= 0) {
                 clearInterval(phaseTimer);
+                // 【核心修正點】：階段倒數結束時，立即記錄此階段成績
+                recordPhaseResult();
                 resolve();
             }
         }, 1000);
@@ -664,8 +578,10 @@ function stopAndSave() {
     timerId = null; 
     navigator.geolocation.clearWatch(watchId);
     
+    // 【核心修正點】：如果手動長按結束，且最後一個階段尚未被結算，在此進行最後記錄
     if (currentPhaseName !== "") {
         recordPhaseResult();
+        currentPhaseName = "";
     }
 
     let optimizedPoints = [];
