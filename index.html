@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>跑步教練 V9.1.2</title>
+<title>跑步教練 V9.1.3</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -93,7 +93,7 @@ input[type="number"], input[type="text"] { width: 90%; padding: 6px 0; text-alig
 </div>
 
 <div class="card">
-  <h2>跑步教練 V9.1.2</h2>
+  <h2>跑步教練 V9.1.3</h2>
   <div>
       <table>
         <thead><tr><th>階段</th><th>BPM</th><th>秒數</th><th>距離(m)</th><th>跑速</th></tr></thead>
@@ -139,9 +139,20 @@ input[type="number"], input[type="text"] { width: 90%; padding: 6px 0; text-alig
 <div class="card"><strong>歷史紀錄</strong><div id="historyContainer"></div></div>
 
 <script>
-const CONFIG_KEY = 'run_config_v912';
-const HISTORY_KEY = 'run_history_v912';
-const DB_KEY = 'run_db_v912';
+const CONFIG_KEY = 'run_config_v913';
+const HISTORY_KEY = 'run_history_v913';
+const DB_KEY = 'run_db_v913';
+
+// 預設 data.txt 的內建降級資料，防止 fetch 失敗或非同步異常
+const DEFAULT_TXT_DATA = `超慢跑旋轉功,180,1200,1750,180,1200,1750
+6K輕鬆跑,180,420,1000,180,2580,7000
+10K漸速跑,180,420,1000,180,1080,3000,185,1005,3000,190,945,3000,190,300,1000
+13K漸速跑,180,420,1000,180,360,3000,185,1360,4000,190,1280,4000,190,620,2000
+挪威4*4,180,420,1000,190,240,820,180,180,820,180,420,1000
+亞索800,180,180,400,190,115,400,180,180,400
+6K賽事,190,285,1000,190,295,1000,190,290,1000
+10K賽事,180,285,1000,190,299,1000,195,290,1000
+半馬賽事,180,1800,5000,185,1725,5000,185,1650,5000,185,1700,5000,190,330,1000`;
 
 let isRunning = false, totalDist = 0, elapsedSec = 0;
 let audioCtx = null, timerId = null, watchId = null, trackPoints = [];
@@ -150,19 +161,21 @@ let startNote = { location: "偵測中", weather: "偵測中" };
 let lastKmDist = 0, lastKmSec = 0, currentRunningBPM = 180;
 let holdTimer = null, holdPercent = 0;
 
-let config = {
+let defaultConfig = {
     items: [
-        { bpm:180, sec:420, dist:1000 },
-        { bpm:180, sec:2580, dist:7000 }
+        { bpm:180, sec:285, dist:1000 },
+        { bpm:190, sec:299, dist:1000 },
+        { bpm:195, sec:290, dist:1000 }
     ],
     loopStart: 1,
-    loopEnd: 2,
+    loopEnd: 3,
     loops: 1,
     threshold: 1.81,
     distRatio: 100,
     alarmOn: true
 };
 
+let config = JSON.parse(JSON.stringify(defaultConfig));
 let currentPhaseName = "";
 let currentLoopIndex = 0;
 let phaseRecords = [];
@@ -176,19 +189,27 @@ function getAudioContext() {
 
 async function init() {
     await initDatabase();
+    
+    // 讀取既有設定
     const saved = localStorage.getItem(CONFIG_KEY);
     if(saved) {
-        try { Object.assign(config, JSON.parse(saved)); } catch(e){}
+        try { 
+            let parsed = JSON.parse(saved);
+            if(parsed && parsed.items && parsed.items.length > 0) {
+                config = parsed;
+            }
+        } catch(e){}
     }
+    
     renderMainTable();
     fillSettingsForm();
     uiUpdate(); 
     renderHistory();
 }
 
-// 從 data.txt 解析 CSV 資料存入 LocalStorage
 async function initDatabase() {
     if (!localStorage.getItem(DB_KEY)) {
+        let loaded = false;
         try {
             let response = await fetch('data.txt');
             if (response.ok) {
@@ -196,16 +217,18 @@ async function initDatabase() {
                 let parsedDb = parseTxtToDb(text);
                 if (parsedDb.length > 0) {
                     localStorage.setItem(DB_KEY, JSON.stringify(parsedDb));
-                    return;
+                    loaded = true;
                 }
             }
-        } catch (e) {
-            console.warn("無法自動載入 data.txt，使用預設值:", e);
+        } catch (e) {}
+
+        if (!loaded) {
+            let parsedDb = parseTxtToDb(DEFAULT_TXT_DATA);
+            localStorage.setItem(DB_KEY, JSON.stringify(parsedDb));
         }
     }
 }
 
-// 解析 data.txt 的邏輯
 function parseTxtToDb(txt) {
     let lines = txt.split('\n');
     let db = [];
@@ -239,7 +262,6 @@ function parseTxtToDb(txt) {
     return db;
 }
 
-// 將目前的預設資料庫轉為 data.txt 文字格式
 function dbToTxtFormat(db) {
     return db.map(entry => {
         let row = [entry.name];
@@ -250,7 +272,6 @@ function dbToTxtFormat(db) {
     }).join('\n');
 }
 
-// 匯出 data.txt 檔案給使用者下載
 function exportDataTxt() {
     let db = JSON.parse(localStorage.getItem(DB_KEY) || "[]");
     let txtContent = dbToTxtFormat(db);
@@ -263,13 +284,14 @@ function exportDataTxt() {
 
 function renderMainTable() {
     let html = "";
+    if(!config.items) config.items = [];
     config.items.forEach((it, i) => {
         let pLabel = `${i+1}階`;
         html += `<tr>
             <td><b>${pLabel}</b></td>
-            <td><input type="number" id="bpm_${i}" value="${it.bpm}" oninput="uiUpdate()"></td>
-            <td><input type="number" id="sec_${i}" value="${it.sec}" oninput="uiUpdate()"></td>
-            <td><input type="number" id="dist_${i}" value="${it.dist}" oninput="uiUpdate()"></td>
+            <td><input type="number" id="bpm_${i}" value="${it.bpm||180}" oninput="uiUpdate()"></td>
+            <td><input type="number" id="sec_${i}" value="${it.sec||300}" oninput="uiUpdate()"></td>
+            <td><input type="number" id="dist_${i}" value="${it.dist||1000}" oninput="uiUpdate()"></td>
             <td class="pace-text" id="pace_${i}">--</td>
         </tr>`;
     });
@@ -278,14 +300,15 @@ function renderMainTable() {
 
 function fillSettingsForm() {
     if(document.getElementById('loopStart')) document.getElementById('loopStart').value = config.loopStart || 1;
-    if(document.getElementById('loopEnd')) document.getElementById('loopEnd').value = config.loopEnd || config.items.length;
+    if(document.getElementById('loopEnd')) document.getElementById('loopEnd').value = config.loopEnd || (config.items?config.items.length:1);
     if(document.getElementById('loopCount')) document.getElementById('loopCount').value = config.loops || 1;
-    if(document.getElementById('thresInput')) document.getElementById('thresInput').value = config.threshold.toFixed(2);
-    if(document.getElementById('ratioInput')) document.getElementById('ratioInput').value = config.distRatio;
-    if(document.getElementById('alarmToggle')) document.getElementById('alarmToggle').checked = config.alarmOn;
+    if(document.getElementById('thresInput')) document.getElementById('thresInput').value = (config.threshold||1.81).toFixed(2);
+    if(document.getElementById('ratioInput')) document.getElementById('ratioInput').value = config.distRatio||100;
+    if(document.getElementById('alarmToggle')) document.getElementById('alarmToggle').checked = config.alarmOn !== false;
 }
 
 function uiUpdate() {
+    if(!config.items) return;
     config.items.forEach((it, i) => {
         let b = document.getElementById(`bpm_${i}`), s = document.getElementById(`sec_${i}`), d = document.getElementById(`dist_${i}`);
         if(b) it.bpm = +b.value; 
@@ -299,9 +322,9 @@ function uiUpdate() {
     });
 
     let totalPhases = config.items.length;
-    let lStart = document.getElementById('loopStart') ? Math.max(1, Math.min(totalPhases, +document.getElementById('loopStart').value)) : 1;
-    let lEnd = document.getElementById('loopEnd') ? Math.max(lStart, Math.min(totalPhases, +document.getElementById('loopEnd').value)) : totalPhases;
-    let lCount = document.getElementById('loopCount') ? Math.max(1, +document.getElementById('loopCount').value) : 1;
+    let lStart = document.getElementById('loopStart') ? Math.max(1, Math.min(totalPhases, +document.getElementById('loopStart').value||1)) : 1;
+    let lEnd = document.getElementById('loopEnd') ? Math.max(lStart, Math.min(totalPhases, +document.getElementById('loopEnd').value||totalPhases)) : totalPhases;
+    let lCount = document.getElementById('loopCount') ? Math.max(1, +document.getElementById('loopCount').value||1) : 1;
 
     config.loopStart = lStart;
     config.loopEnd = lEnd;
@@ -309,19 +332,16 @@ function uiUpdate() {
 
     let totalPlanSec = 0, totalPlanDist = 0;
     for (let i = 0; i < lStart - 1; i++) {
-        totalPlanSec += config.items[i].sec;
-        totalPlanDist += config.items[i].dist;
+        if(config.items[i]) { totalPlanSec += config.items[i].sec; totalPlanDist += config.items[i].dist; }
     }
     let loopSec = 0, loopDist = 0;
     for (let i = lStart - 1; i < lEnd; i++) {
-        loopSec += config.items[i].sec;
-        loopDist += config.items[i].dist;
+        if(config.items[i]) { loopSec += config.items[i].sec; loopDist += config.items[i].dist; }
     }
     totalPlanSec += loopSec * lCount;
     totalPlanDist += loopDist * lCount;
     for (let i = lEnd; i < totalPhases; i++) {
-        totalPlanSec += config.items[i].sec;
-        totalPlanDist += config.items[i].dist;
+        if(config.items[i]) { totalPlanSec += config.items[i].sec; totalPlanDist += config.items[i].dist; }
     }
     
     document.getElementById('totalPlanTime').innerText = (totalPlanSec / 60).toFixed(1);
@@ -379,7 +399,6 @@ function updateDbName(idx, val) { let db = JSON.parse(localStorage.getItem(DB_KE
 function updateDbLoopRange(idx, field, val) { let db = JSON.parse(localStorage.getItem(DB_KEY)); db[idx][field] = Math.max(1, Number(val)); localStorage.setItem(DB_KEY, JSON.stringify(db)); renderDbList(); }
 function updateDbItem(idx, phaseIdx, field, val) { let db = JSON.parse(localStorage.getItem(DB_KEY)); db[idx].items[phaseIdx][field] = Number(val); localStorage.setItem(DB_KEY, JSON.stringify(db)); renderDbList(); }
 
-// 新增階段：預設距離改為 1000m
 function addDbPhase(idx) { 
     let db = JSON.parse(localStorage.getItem(DB_KEY)); 
     db[idx].items.push({ bpm: 180, sec: 300, dist: 1000 }); 
@@ -391,7 +410,6 @@ function addDbPhase(idx) {
 function deleteDbPhase(idx, phaseIdx) { let db = JSON.parse(localStorage.getItem(DB_KEY)); if (db[idx].items.length <= 1) { alert("至少需要保留一個階段！"); return; } db[idx].items.splice(phaseIdx, 1); if (db[idx].loopEnd > db[idx].items.length) db[idx].loopEnd = db[idx].items.length; if (db[idx].loopStart > db[idx].items.length) db[idx].loopStart = db[idx].items.length; localStorage.setItem(DB_KEY, JSON.stringify(db)); renderDbList(); }
 function loadDbItem(idx) { let db = JSON.parse(localStorage.getItem(DB_KEY)); let item = db[idx]; config.items = JSON.parse(JSON.stringify(item.items)); config.loopStart = item.loopStart || 1; config.loopEnd = item.loopEnd || config.items.length; config.loops = item.loops || 1; renderMainTable(); fillSettingsForm(); uiUpdate(); closeDbModal(); }
 
-// 新增預設計畫：預設距離 1000m，且預設 2 階（第 2 階與第 1 階相同）
 function addDbItem() { 
     let db = JSON.parse(localStorage.getItem(DB_KEY)); 
     db.push({ 
@@ -411,9 +429,9 @@ function addDbItem() {
 function deleteDbItem(idx) { if(!confirm("確定要刪除這筆預設計畫？")) return; let db = JSON.parse(localStorage.getItem(DB_KEY)); db.splice(idx, 1); localStorage.setItem(DB_KEY, JSON.stringify(db)); renderDbList(); }
 
 function manualThresChange(v) { let num = parseFloat(v); if (!isNaN(num) && num > 0) { config.threshold = num; localStorage.setItem(CONFIG_KEY, JSON.stringify(config)); } }
-function adjThres(v) { config.threshold = Math.max(0.01, parseFloat((config.threshold + v).toFixed(2))); document.getElementById('thresInput').value = config.threshold.toFixed(2); localStorage.setItem(CONFIG_KEY, JSON.stringify(config)); }
+function adjThres(v) { config.threshold = Math.max(0.01, parseFloat(((config.threshold||1.81) + v).toFixed(2))); document.getElementById('thresInput').value = config.threshold.toFixed(2); localStorage.setItem(CONFIG_KEY, JSON.stringify(config)); }
 function manualRatioChange(v) { let num = parseInt(v); if (!isNaN(num) && num > 0) { config.distRatio = num; localStorage.setItem(CONFIG_KEY, JSON.stringify(config)); } }
-function adjRatio(v) { config.distRatio = Math.max(1, config.distRatio + v); document.getElementById('ratioInput').value = config.distRatio; localStorage.setItem(CONFIG_KEY, JSON.stringify(config)); }
+function adjRatio(v) { config.distRatio = Math.max(1, (config.distRatio||100) + v); document.getElementById('ratioInput').value = config.distRatio; localStorage.setItem(CONFIG_KEY, JSON.stringify(config)); }
 
 async function toggleStart(isAuto) {
     if (isRunning) return; 
@@ -795,6 +813,7 @@ function viewTrack(id) {
 }
 function closeMap() { document.getElementById('mapModal').style.display = 'none'; }
 function deleteRec(id) { if(confirm("刪除紀錄？")) { let recs = JSON.parse(localStorage.getItem(HISTORY_KEY)).filter(x=>x.id!==id); localStorage.setItem(HISTORY_KEY, JSON.stringify(recs)); renderHistory(); } }
+
 window.onload = init;
 </script>
 </body>
