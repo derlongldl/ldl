@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>跑步教練 V9.1.4</title>
+<title>跑步教練 V9.1.5</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -93,7 +93,7 @@ input[type="number"], input[type="text"] { width: 90%; padding: 6px 0; text-alig
 </div>
 
 <div class="card">
-  <h2>跑步教練 V9.1.4</h2>
+  <h2>跑步教練 V9.1.5</h2>
   <div>
       <table>
         <thead><tr><th>階段</th><th>BPM</th><th>秒數</th><th>距離(m)</th><th>跑速</th></tr></thead>
@@ -139,11 +139,12 @@ input[type="number"], input[type="text"] { width: 90%; padding: 6px 0; text-alig
 <div class="card"><strong>歷史紀錄</strong><div id="historyContainer"></div></div>
 
 <script>
-const CONFIG_KEY = 'run_config_v914';
-const HISTORY_KEY = 'run_history_v914';
-const DB_KEY = 'run_db_v914';
+const CONFIG_KEY = 'run_config_v915';
+const HISTORY_KEY = 'run_history_v915';
+const DB_KEY = 'run_db_v915';
 
-const DEFAULT_TXT_DATA = `10K漸速跑,180,420,1000,180,1080,3000,185,1005,3000,190,945,3000,190,300,1000
+// 直接將 DATA 檔內建於核心碼，零依賴網路請求
+const HARDCODED_DATA_TXT = `10K漸速跑,180,420,1000,180,1080,3000,185,1005,3000,190,945,3000,190,300,1000
 超慢跑旋轉功,180,1200,1750,180,1200,1750
 6K輕鬆跑,180,420,1000,180,2580,7000
 13K漸速跑,180,420,1000,180,360,3000,185,1360,4000,190,1280,4000,190,620,2000
@@ -186,36 +187,67 @@ function getAudioContext() {
 }
 
 function init() {
+    // 步驟一：先載入內建資料庫
+    initDatabase();
+    
+    // 步驟二：讀取 LocalStorage 配置，若無則自動帶入第一筆計畫
     try {
-        initDatabase();
         let saved = localStorage.getItem(CONFIG_KEY);
         if (saved) {
             let parsed = JSON.parse(saved);
             if (parsed && Array.isArray(parsed.items) && parsed.items.length > 0) {
                 config = parsed;
             }
+        } else {
+            // 自動預設載入資料庫第 0 筆（10K漸速跑）
+            let db = JSON.parse(localStorage.getItem(DB_KEY) || "[]");
+            if(db.length > 0) {
+                config.items = JSON.parse(JSON.stringify(db[0].items));
+                config.loopStart = db[0].loopStart || 1;
+                config.loopEnd = db[0].loopEnd || config.items.length;
+                config.loops = db[0].loops || 1;
+            }
         }
     } catch(e) {
-        console.error("Init fallback to default", e);
+        console.error("Config load fallback", e);
     }
     
+    // 步驟三：同步 UI 渲染
     renderMainTable();
     fillSettingsForm();
     uiUpdate(); 
     renderHistory();
+    
+    // 步驟四：背景安全試探 External data.txt（讀取失敗亦不卡死）
+    tryFetchExternalTxt();
 }
 
 function initDatabase() {
-    if (!localStorage.getItem(DB_KEY)) {
-        let parsedDb = parseTxtToDb(DEFAULT_TXT_DATA);
-        localStorage.setItem(DB_KEY, JSON.stringify(parsedDb));
-    }
-    fetch('data.txt').then(r => r.ok ? r.text() : null).then(txt => {
-        if (txt) {
-            let parsed = parseTxtToDb(txt);
-            if (parsed.length > 0) localStorage.setItem(DB_KEY, JSON.stringify(parsed));
+    try {
+        let existingDb = localStorage.getItem(DB_KEY);
+        if (!existingDb) {
+            let parsedDb = parseTxtToDb(HARDCODED_DATA_TXT);
+            localStorage.setItem(DB_KEY, JSON.stringify(parsedDb));
         }
-    }).catch(e => {});
+    } catch(e) {
+        console.error("DB init error", e);
+    }
+}
+
+function tryFetchExternalTxt() {
+    fetch('data.txt')
+        .then(r => r.ok ? r.text() : null)
+        .then(txt => {
+            if (txt) {
+                let parsed = parseTxtToDb(txt);
+                if (parsed.length > 0) {
+                    localStorage.setItem(DB_KEY, JSON.stringify(parsed));
+                }
+            }
+        })
+        .catch(e => {
+            // 忽略 CORS 或 404 錯誤，確保本地功能運作
+        });
 }
 
 function parseTxtToDb(txt) {
@@ -273,7 +305,7 @@ function exportDataTxt() {
 
 function renderMainTable() {
     let html = "";
-    if(!config.items || config.items.length === 0) {
+    if(!config.items || !Array.isArray(config.items) || config.items.length === 0) {
         config.items = [
             { bpm:180, sec:285, dist:1000 },
             { bpm:190, sec:299, dist:1000 },
