@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>跑步教練 V9.1.3</title>
+<title>跑步教練 V9.1.4</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -93,7 +93,7 @@ input[type="number"], input[type="text"] { width: 90%; padding: 6px 0; text-alig
 </div>
 
 <div class="card">
-  <h2>跑步教練 V9.1.3</h2>
+  <h2>跑步教練 V9.1.4</h2>
   <div>
       <table>
         <thead><tr><th>階段</th><th>BPM</th><th>秒數</th><th>距離(m)</th><th>跑速</th></tr></thead>
@@ -139,14 +139,13 @@ input[type="number"], input[type="text"] { width: 90%; padding: 6px 0; text-alig
 <div class="card"><strong>歷史紀錄</strong><div id="historyContainer"></div></div>
 
 <script>
-const CONFIG_KEY = 'run_config_v913';
-const HISTORY_KEY = 'run_history_v913';
-const DB_KEY = 'run_db_v913';
+const CONFIG_KEY = 'run_config_v914';
+const HISTORY_KEY = 'run_history_v914';
+const DB_KEY = 'run_db_v914';
 
-// 預設 data.txt 的內建降級資料，防止 fetch 失敗或非同步異常
-const DEFAULT_TXT_DATA = `超慢跑旋轉功,180,1200,1750,180,1200,1750
+const DEFAULT_TXT_DATA = `10K漸速跑,180,420,1000,180,1080,3000,185,1005,3000,190,945,3000,190,300,1000
+超慢跑旋轉功,180,1200,1750,180,1200,1750
 6K輕鬆跑,180,420,1000,180,2580,7000
-10K漸速跑,180,420,1000,180,1080,3000,185,1005,3000,190,945,3000,190,300,1000
 13K漸速跑,180,420,1000,180,360,3000,185,1360,4000,190,1280,4000,190,620,2000
 挪威4*4,180,420,1000,190,240,820,180,180,820,180,420,1000
 亞索800,180,180,400,190,115,400,180,180,400
@@ -161,7 +160,7 @@ let startNote = { location: "偵測中", weather: "偵測中" };
 let lastKmDist = 0, lastKmSec = 0, currentRunningBPM = 180;
 let holdTimer = null, holdPercent = 0;
 
-let defaultConfig = {
+let config = {
     items: [
         { bpm:180, sec:285, dist:1000 },
         { bpm:190, sec:299, dist:1000 },
@@ -175,7 +174,6 @@ let defaultConfig = {
     alarmOn: true
 };
 
-let config = JSON.parse(JSON.stringify(defaultConfig));
 let currentPhaseName = "";
 let currentLoopIndex = 0;
 let phaseRecords = [];
@@ -187,18 +185,18 @@ function getAudioContext() {
     return audioCtx;
 }
 
-async function init() {
-    await initDatabase();
-    
-    // 讀取既有設定
-    const saved = localStorage.getItem(CONFIG_KEY);
-    if(saved) {
-        try { 
+function init() {
+    try {
+        initDatabase();
+        let saved = localStorage.getItem(CONFIG_KEY);
+        if (saved) {
             let parsed = JSON.parse(saved);
-            if(parsed && parsed.items && parsed.items.length > 0) {
+            if (parsed && Array.isArray(parsed.items) && parsed.items.length > 0) {
                 config = parsed;
             }
-        } catch(e){}
+        }
+    } catch(e) {
+        console.error("Init fallback to default", e);
     }
     
     renderMainTable();
@@ -207,26 +205,17 @@ async function init() {
     renderHistory();
 }
 
-async function initDatabase() {
+function initDatabase() {
     if (!localStorage.getItem(DB_KEY)) {
-        let loaded = false;
-        try {
-            let response = await fetch('data.txt');
-            if (response.ok) {
-                let text = await response.text();
-                let parsedDb = parseTxtToDb(text);
-                if (parsedDb.length > 0) {
-                    localStorage.setItem(DB_KEY, JSON.stringify(parsedDb));
-                    loaded = true;
-                }
-            }
-        } catch (e) {}
-
-        if (!loaded) {
-            let parsedDb = parseTxtToDb(DEFAULT_TXT_DATA);
-            localStorage.setItem(DB_KEY, JSON.stringify(parsedDb));
-        }
+        let parsedDb = parseTxtToDb(DEFAULT_TXT_DATA);
+        localStorage.setItem(DB_KEY, JSON.stringify(parsedDb));
     }
+    fetch('data.txt').then(r => r.ok ? r.text() : null).then(txt => {
+        if (txt) {
+            let parsed = parseTxtToDb(txt);
+            if (parsed.length > 0) localStorage.setItem(DB_KEY, JSON.stringify(parsed));
+        }
+    }).catch(e => {});
 }
 
 function parseTxtToDb(txt) {
@@ -284,7 +273,13 @@ function exportDataTxt() {
 
 function renderMainTable() {
     let html = "";
-    if(!config.items) config.items = [];
+    if(!config.items || config.items.length === 0) {
+        config.items = [
+            { bpm:180, sec:285, dist:1000 },
+            { bpm:190, sec:299, dist:1000 },
+            { bpm:195, sec:290, dist:1000 }
+        ];
+    }
     config.items.forEach((it, i) => {
         let pLabel = `${i+1}階`;
         html += `<tr>
@@ -295,16 +290,24 @@ function renderMainTable() {
             <td class="pace-text" id="pace_${i}">--</td>
         </tr>`;
     });
-    document.getElementById('configRows').innerHTML = html;
+    let el = document.getElementById('configRows');
+    if (el) el.innerHTML = html;
 }
 
 function fillSettingsForm() {
-    if(document.getElementById('loopStart')) document.getElementById('loopStart').value = config.loopStart || 1;
-    if(document.getElementById('loopEnd')) document.getElementById('loopEnd').value = config.loopEnd || (config.items?config.items.length:1);
-    if(document.getElementById('loopCount')) document.getElementById('loopCount').value = config.loops || 1;
-    if(document.getElementById('thresInput')) document.getElementById('thresInput').value = (config.threshold||1.81).toFixed(2);
-    if(document.getElementById('ratioInput')) document.getElementById('ratioInput').value = config.distRatio||100;
-    if(document.getElementById('alarmToggle')) document.getElementById('alarmToggle').checked = config.alarmOn !== false;
+    let elLS = document.getElementById('loopStart');
+    let elLE = document.getElementById('loopEnd');
+    let elLC = document.getElementById('loopCount');
+    let elTH = document.getElementById('thresInput');
+    let elRA = document.getElementById('ratioInput');
+    let elAL = document.getElementById('alarmToggle');
+
+    if(elLS) elLS.value = config.loopStart || 1;
+    if(elLE) elLE.value = config.loopEnd || (config.items?config.items.length:1);
+    if(elLC) elLC.value = config.loops || 1;
+    if(elTH) elTH.value = (config.threshold||1.81).toFixed(2);
+    if(elRA) elRA.value = config.distRatio||100;
+    if(elAL) elAL.checked = config.alarmOn !== false;
 }
 
 function uiUpdate() {
@@ -322,9 +325,10 @@ function uiUpdate() {
     });
 
     let totalPhases = config.items.length;
-    let lStart = document.getElementById('loopStart') ? Math.max(1, Math.min(totalPhases, +document.getElementById('loopStart').value||1)) : 1;
-    let lEnd = document.getElementById('loopEnd') ? Math.max(lStart, Math.min(totalPhases, +document.getElementById('loopEnd').value||totalPhases)) : totalPhases;
-    let lCount = document.getElementById('loopCount') ? Math.max(1, +document.getElementById('loopCount').value||1) : 1;
+    let elLS = document.getElementById('loopStart'), elLE = document.getElementById('loopEnd'), elLC = document.getElementById('loopCount');
+    let lStart = elLS ? Math.max(1, Math.min(totalPhases, +elLS.value||1)) : 1;
+    let lEnd = elLE ? Math.max(lStart, Math.min(totalPhases, +elLE.value||totalPhases)) : totalPhases;
+    let lCount = elLC ? Math.max(1, +elLC.value||1) : 1;
 
     config.loopStart = lStart;
     config.loopEnd = lEnd;
@@ -344,8 +348,9 @@ function uiUpdate() {
         if(config.items[i]) { totalPlanSec += config.items[i].sec; totalPlanDist += config.items[i].dist; }
     }
     
-    document.getElementById('totalPlanTime').innerText = (totalPlanSec / 60).toFixed(1);
-    document.getElementById('totalPlanDist').innerText = (totalPlanDist / 1000).toFixed(2);
+    let elTPT = document.getElementById('totalPlanTime'), elTPD = document.getElementById('totalPlanDist');
+    if (elTPT) elTPT.innerText = (totalPlanSec / 60).toFixed(1);
+    if (elTPD) elTPD.innerText = (totalPlanDist / 1000).toFixed(2);
     localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
 }
 
@@ -354,6 +359,7 @@ function closeDbModal() { document.getElementById('dbModal').style.display = 'no
 
 function renderDbList() {
     const listContainer = document.getElementById('dbList');
+    if (!listContainer) return;
     listContainer.innerHTML = "";
     const db = JSON.parse(localStorage.getItem(DB_KEY) || "[]");
     
@@ -767,7 +773,9 @@ function forceCloseRescue() {
 function renderHistory() {
     try {
         const recs = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
-        document.getElementById('historyContainer').innerHTML = recs.map(r => `
+        let container = document.getElementById('historyContainer');
+        if (!container) return;
+        container.innerHTML = recs.map(r => `
             <div class="history-card">
                 <b>🏃 ${r.dist} km | ${r.time}</b> (${r.date})
                 <div style="font-size:11px; color:#666; margin:5px 0; white-space:pre-wrap;">${r.note || '無'}</div>
@@ -814,7 +822,7 @@ function viewTrack(id) {
 function closeMap() { document.getElementById('mapModal').style.display = 'none'; }
 function deleteRec(id) { if(confirm("刪除紀錄？")) { let recs = JSON.parse(localStorage.getItem(HISTORY_KEY)).filter(x=>x.id!==id); localStorage.setItem(HISTORY_KEY, JSON.stringify(recs)); renderHistory(); } }
 
-window.onload = init;
+document.addEventListener("DOMContentLoaded", init);
 </script>
 </body>
 </html>
