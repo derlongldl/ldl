@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>跑步教練 V9.1.5</title>
+<title>跑步教練 V9.1.6</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -46,7 +46,6 @@ input[type="number"], input[type="text"] { width: 90%; padding: 6px 0; text-alig
 </head>
 <body>
 
-<!-- 資料庫選擇與維護 Modal -->
 <div id="dbModal">
     <div class="note-box">
         <h3 style="margin-top:0; color:var(--primary); text-align:center;">跑步計畫資料庫</h3>
@@ -93,7 +92,7 @@ input[type="number"], input[type="text"] { width: 90%; padding: 6px 0; text-alig
 </div>
 
 <div class="card">
-  <h2>跑步教練 V9.1.5</h2>
+  <h2>跑步教練 V9.1.6</h2>
   <div>
       <table>
         <thead><tr><th>階段</th><th>BPM</th><th>秒數</th><th>距離(m)</th><th>跑速</th></tr></thead>
@@ -139,11 +138,10 @@ input[type="number"], input[type="text"] { width: 90%; padding: 6px 0; text-alig
 <div class="card"><strong>歷史紀錄</strong><div id="historyContainer"></div></div>
 
 <script>
-const CONFIG_KEY = 'run_config_v915';
-const HISTORY_KEY = 'run_history_v915';
-const DB_KEY = 'run_db_v915';
+const CONFIG_KEY = 'run_config_v916';
+const HISTORY_KEY = 'run_history_v916';
+const DB_KEY = 'run_db_v916';
 
-// 直接將 DATA 檔內建於核心碼，零依賴網路請求
 const HARDCODED_DATA_TXT = `10K漸速跑,180,420,1000,180,1080,3000,185,1005,3000,190,945,3000,190,300,1000
 超慢跑旋轉功,180,1200,1750,180,1200,1750
 6K輕鬆跑,180,420,1000,180,2580,7000
@@ -161,6 +159,7 @@ let startNote = { location: "偵測中", weather: "偵測中" };
 let lastKmDist = 0, lastKmSec = 0, currentRunningBPM = 180;
 let holdTimer = null, holdPercent = 0;
 
+// 保底預設設定
 let config = {
     items: [
         { bpm:180, sec:285, dist:1000 },
@@ -187,10 +186,8 @@ function getAudioContext() {
 }
 
 function init() {
-    // 步驟一：先載入內建資料庫
     initDatabase();
-    
-    // 步驟二：讀取 LocalStorage 配置，若無則自動帶入第一筆計畫
+
     try {
         let saved = localStorage.getItem(CONFIG_KEY);
         if (saved) {
@@ -199,9 +196,8 @@ function init() {
                 config = parsed;
             }
         } else {
-            // 自動預設載入資料庫第 0 筆（10K漸速跑）
             let db = JSON.parse(localStorage.getItem(DB_KEY) || "[]");
-            if(db.length > 0) {
+            if (db.length > 0) {
                 config.items = JSON.parse(JSON.stringify(db[0].items));
                 config.loopStart = db[0].loopStart || 1;
                 config.loopEnd = db[0].loopEnd || config.items.length;
@@ -209,16 +205,24 @@ function init() {
             }
         }
     } catch(e) {
-        console.error("Config load fallback", e);
+        console.error("Config load fallback trigger", e);
     }
-    
-    // 步驟三：同步 UI 渲染
+
+    // 確保必備屬性存在
+    if (!config.items || !Array.isArray(config.items) || config.items.length === 0) {
+        config.items = [
+            { bpm:180, sec:285, dist:1000 },
+            { bpm:190, sec:299, dist:1000 },
+            { bpm:195, sec:290, dist:1000 }
+        ];
+    }
+
+    // 執行 UI 渲染
     renderMainTable();
     fillSettingsForm();
     uiUpdate(); 
     renderHistory();
     
-    // 步驟四：背景安全試探 External data.txt（讀取失敗亦不卡死）
     tryFetchExternalTxt();
 }
 
@@ -245,9 +249,7 @@ function tryFetchExternalTxt() {
                 }
             }
         })
-        .catch(e => {
-            // 忽略 CORS 或 404 錯誤，確保本地功能運作
-        });
+        .catch(e => {});
 }
 
 function parseTxtToDb(txt) {
@@ -305,13 +307,6 @@ function exportDataTxt() {
 
 function renderMainTable() {
     let html = "";
-    if(!config.items || !Array.isArray(config.items) || config.items.length === 0) {
-        config.items = [
-            { bpm:180, sec:285, dist:1000 },
-            { bpm:190, sec:299, dist:1000 },
-            { bpm:195, sec:290, dist:1000 }
-        ];
-    }
     config.items.forEach((it, i) => {
         let pLabel = `${i+1}階`;
         html += `<tr>
@@ -335,7 +330,7 @@ function fillSettingsForm() {
     let elAL = document.getElementById('alarmToggle');
 
     if(elLS) elLS.value = config.loopStart || 1;
-    if(elLE) elLE.value = config.loopEnd || (config.items?config.items.length:1);
+    if(elLE) elLE.value = config.loopEnd || config.items.length;
     if(elLC) elLC.value = config.loops || 1;
     if(elTH) elTH.value = (config.threshold||1.81).toFixed(2);
     if(elRA) elRA.value = config.distRatio||100;
@@ -383,7 +378,7 @@ function uiUpdate() {
     let elTPT = document.getElementById('totalPlanTime'), elTPD = document.getElementById('totalPlanDist');
     if (elTPT) elTPT.innerText = (totalPlanSec / 60).toFixed(1);
     if (elTPD) elTPD.innerText = (totalPlanDist / 1000).toFixed(2);
-    localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+    try { localStorage.setItem(CONFIG_KEY, JSON.stringify(config)); } catch(e){}
 }
 
 function openDbModal() { renderDbList(); document.getElementById('dbModal').style.display = 'flex'; }
@@ -854,7 +849,12 @@ function viewTrack(id) {
 function closeMap() { document.getElementById('mapModal').style.display = 'none'; }
 function deleteRec(id) { if(confirm("刪除紀錄？")) { let recs = JSON.parse(localStorage.getItem(HISTORY_KEY)).filter(x=>x.id!==id); localStorage.setItem(HISTORY_KEY, JSON.stringify(recs)); renderHistory(); } }
 
-document.addEventListener("DOMContentLoaded", init);
+// 雙重啟動機制：DomContentLoaded 或直接觸發，避免載入事件遺失
+if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+} else {
+    init();
+}
 </script>
 </body>
 </html>
