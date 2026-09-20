@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>跑步教練 V9.1.1</title>
+<title>跑步教練 V9.1.2</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -51,7 +51,8 @@ input[type="number"], input[type="text"] { width: 90%; padding: 6px 0; text-alig
     <div class="note-box">
         <h3 style="margin-top:0; color:var(--primary); text-align:center;">跑步計畫資料庫</h3>
         <div id="dbList"></div>
-        <button onclick="addDbItem()" style="width:100%; padding:10px; background:var(--info); color:white; border:none; border-radius:8px; font-weight:bold; margin-bottom:10px;">＋ 新增預設資料</button>
+        <button onclick="addDbItem()" style="width:100%; padding:10px; background:var(--info); color:white; border:none; border-radius:8px; font-weight:bold; margin-bottom:8px;">＋ 新增預設資料</button>
+        <button onclick="exportDataTxt()" style="width:100%; padding:10px; background:var(--note); color:white; border:none; border-radius:8px; font-weight:bold; margin-bottom:8px;">💾 匯出至 data.txt 備份</button>
         <button onclick="closeDbModal()" style="width:100%; padding:10px; background:#888; color:white; border:none; border-radius:8px;">關閉</button>
     </div>
 </div>
@@ -92,7 +93,7 @@ input[type="number"], input[type="text"] { width: 90%; padding: 6px 0; text-alig
 </div>
 
 <div class="card">
-  <h2>跑步教練 V9.1.1</h2>
+  <h2>跑步教練 V9.1.2</h2>
   <div>
       <table>
         <thead><tr><th>階段</th><th>BPM</th><th>秒數</th><th>距離(m)</th><th>跑速</th></tr></thead>
@@ -138,9 +139,9 @@ input[type="number"], input[type="text"] { width: 90%; padding: 6px 0; text-alig
 <div class="card"><strong>歷史紀錄</strong><div id="historyContainer"></div></div>
 
 <script>
-const CONFIG_KEY = 'run_config_v911';
-const HISTORY_KEY = 'run_history_v911';
-const DB_KEY = 'run_db_v911';
+const CONFIG_KEY = 'run_config_v912';
+const HISTORY_KEY = 'run_history_v912';
+const DB_KEY = 'run_db_v912';
 
 let isRunning = false, totalDist = 0, elapsedSec = 0;
 let audioCtx = null, timerId = null, watchId = null, trackPoints = [];
@@ -152,13 +153,10 @@ let holdTimer = null, holdPercent = 0;
 let config = {
     items: [
         { bpm:180, sec:420, dist:1000 },
-        { bpm:180, sec:1080, dist:3000 },
-        { bpm:185, sec:1005, dist:3000 },
-        { bpm:190, sec:945, dist:3000 },
-        { bpm:190, sec:300, dist:1000 }
+        { bpm:180, sec:2580, dist:7000 }
     ],
     loopStart: 1,
-    loopEnd: 5,
+    loopEnd: 2,
     loops: 1,
     threshold: 1.81,
     distRatio: 100,
@@ -170,22 +168,14 @@ let currentLoopIndex = 0;
 let phaseRecords = [];
 let currentPhaseStartDist = 0, currentPhaseStartSec = 0;
 
-const DEFAULT_DB = [
-    { name: "6K輕鬆跑", items: [{bpm:180,sec:420,dist:1000},{bpm:180,sec:390,dist:1000},{bpm:180,sec:390,dist:1000},{bpm:180,sec:390,dist:1000},{bpm:180,sec:390,dist:1000}], loopStart:1, loopEnd:5, loops:1 },
-    { name: "漸速跑10K", items: [{bpm:180,sec:420,dist:1000},{bpm:180,sec:1080,dist:3000},{bpm:185,sec:1005,dist:3000},{bpm:190,sec:945,dist:3000},{bpm:190,sec:300,dist:1000}], loopStart:1, loopEnd:5, loops:1 },
-    { name: "亞索800", items: [{bpm:180,sec:180,dist:400},{bpm:190,sec:115,dist:400},{bpm:190,sec:115,dist:400},{bpm:180,sec:180,dist:400},{bpm:180,sec:180,dist:400}], loopStart:2, loopEnd:3, loops:5 },
-    { name: "旋轉功", items: [{bpm:180,sec:2400,dist:3500}], loopStart:1, loopEnd:1, loops:1 },
-    { name: "恢復跑7K", items: [{bpm:180,sec:3000,dist:7000}], loopStart:1, loopEnd:1, loops:1 }
-];
-
 function getAudioContext() {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     if (audioCtx.state === 'suspended') audioCtx.resume();
     return audioCtx;
 }
 
-function init() {
-    initDatabase();
+async function init() {
+    await initDatabase();
     const saved = localStorage.getItem(CONFIG_KEY);
     if(saved) {
         try { Object.assign(config, JSON.parse(saved)); } catch(e){}
@@ -196,10 +186,79 @@ function init() {
     renderHistory();
 }
 
-function initDatabase() {
+// 從 data.txt 解析 CSV 資料存入 LocalStorage
+async function initDatabase() {
     if (!localStorage.getItem(DB_KEY)) {
-        localStorage.setItem(DB_KEY, JSON.stringify(DEFAULT_DB));
+        try {
+            let response = await fetch('data.txt');
+            if (response.ok) {
+                let text = await response.text();
+                let parsedDb = parseTxtToDb(text);
+                if (parsedDb.length > 0) {
+                    localStorage.setItem(DB_KEY, JSON.stringify(parsedDb));
+                    return;
+                }
+            }
+        } catch (e) {
+            console.warn("無法自動載入 data.txt，使用預設值:", e);
+        }
     }
+}
+
+// 解析 data.txt 的邏輯
+function parseTxtToDb(txt) {
+    let lines = txt.split('\n');
+    let db = [];
+    lines.forEach(line => {
+        line = line.trim();
+        if (!line) return;
+        let parts = line.split(',');
+        if (parts.length < 4) return;
+        
+        let name = parts[0].trim();
+        let items = [];
+        for (let i = 1; i < parts.length; i += 3) {
+            if (i + 2 < parts.length) {
+                items.push({
+                    bpm: Number(parts[i]) || 180,
+                    sec: Number(parts[i+1]) || 300,
+                    dist: Number(parts[i+2]) || 1000
+                });
+            }
+        }
+        if (items.length > 0) {
+            db.push({
+                name: name,
+                items: items,
+                loopStart: 1,
+                loopEnd: items.length,
+                loops: 1
+            });
+        }
+    });
+    return db;
+}
+
+// 將目前的預設資料庫轉為 data.txt 文字格式
+function dbToTxtFormat(db) {
+    return db.map(entry => {
+        let row = [entry.name];
+        entry.items.forEach(it => {
+            row.push(it.bpm, it.sec, it.dist);
+        });
+        return row.join(',');
+    }).join('\n');
+}
+
+// 匯出 data.txt 檔案給使用者下載
+function exportDataTxt() {
+    let db = JSON.parse(localStorage.getItem(DB_KEY) || "[]");
+    let txtContent = dbToTxtFormat(db);
+    let blob = new Blob([txtContent], { type: 'text/plain;charset=utf-8;' });
+    let a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'data.txt';
+    a.click();
 }
 
 function renderMainTable() {
@@ -285,12 +344,12 @@ function renderDbList() {
             let pace = (it.sec > 0 && it.dist > 0) ? formatTime(Math.floor(it.sec / (it.dist/1000))) : '--';
             return `<tr>
                 <td style="display:flex; align-items:center; justify-content:center; gap:2px; border:none; padding:4px 0;">
-                    <button class="btn-del-phase" onclick="deleteDbPhase(${idx}, ${i})" title="刪除此階">✕</button>
+                    <button class="btn-del-phase" onclick="deleteDbPhase(${idx},${i})" title="刪除此階">✕</button>
                     <b>${i+1}階</b>
                 </td>
-                <td><input type="number" value="${it.bpm}" onchange="updateDbItem(${idx}, ${i}, 'bpm', this.value)"></td>
-                <td><input type="number" value="${it.sec}" onchange="updateDbItem(${idx}, ${i}, 'sec', this.value)"></td>
-                <td><input type="number" value="${it.dist}" onchange="updateDbItem(${idx}, ${i}, 'dist', this.value)"></td>
+                <td><input type="number" value="${it.bpm}" onchange="updateDbItem(${idx},${i}, 'bpm', this.value)"></td>
+                <td><input type="number" value="${it.sec}" onchange="updateDbItem(${idx},${i}, 'sec', this.value)"></td>
+                <td><input type="number" value="${it.dist}" onchange="updateDbItem(${idx},${i}, 'dist', this.value)"></td>
                 <td class="pace-text">${pace}</td>
             </tr>`;
         }).join('');
@@ -309,7 +368,7 @@ function renderDbList() {
             </table>
             <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; font-size:12px;">
                 <button onclick="addDbPhase(${idx})" style="padding:4px 8px; background:var(--info); color:white; border:none; border-radius:4px; font-size:12px; cursor:pointer;">＋ 新增階段</button>
-                <span>循環：<input type="number" value="${entry.loopStart||1}" style="width:30px; padding:2px;" onchange="updateDbLoopRange(${idx}, 'loopStart', this.value)">階~<input type="number" value="${entry.loopEnd||entry.items.length}" style="width:30px; padding:2px;" onchange="updateDbLoopRange(${idx}, 'loopEnd', this.value)">階，<input type="number" value="${entry.loops||1}" style="width:35px; padding:2px;" onchange="updateDbLoopRange(${idx}, 'loops', this.value)">組</span>
+                <span>循環：<input type="number" value="${entry.loopStart\vert{}\vert{}1}" style="width:30px; padding:2px;" onchange="updateDbLoopRange(${idx}, 'loopStart', this.value)">階~<input type="number" value="${entry.loopEnd\vert{}\vert{}entry.items.length}" style="width:30px; padding:2px;" onchange="updateDbLoopRange(${idx}, 'loopEnd', this.value)">階，<input type="number" value="${entry.loops\vert{}\vert{}1}" style="width:35px; padding:2px;" onchange="updateDbLoopRange(${idx}, 'loops', this.value)">組</span>
             </div>
         `;
         listContainer.appendChild(div);
@@ -319,10 +378,36 @@ function renderDbList() {
 function updateDbName(idx, val) { let db = JSON.parse(localStorage.getItem(DB_KEY)); db[idx].name = val; localStorage.setItem(DB_KEY, JSON.stringify(db)); }
 function updateDbLoopRange(idx, field, val) { let db = JSON.parse(localStorage.getItem(DB_KEY)); db[idx][field] = Math.max(1, Number(val)); localStorage.setItem(DB_KEY, JSON.stringify(db)); renderDbList(); }
 function updateDbItem(idx, phaseIdx, field, val) { let db = JSON.parse(localStorage.getItem(DB_KEY)); db[idx].items[phaseIdx][field] = Number(val); localStorage.setItem(DB_KEY, JSON.stringify(db)); renderDbList(); }
-function addDbPhase(idx) { let db = JSON.parse(localStorage.getItem(DB_KEY)); db[idx].items.push({ bpm: 180, sec: 300, dist: 500 }); db[idx].loopEnd = db[idx].items.length; localStorage.setItem(DB_KEY, JSON.stringify(db)); renderDbList(); }
+
+// 新增階段：預設距離改為 1000m
+function addDbPhase(idx) { 
+    let db = JSON.parse(localStorage.getItem(DB_KEY)); 
+    db[idx].items.push({ bpm: 180, sec: 300, dist: 1000 }); 
+    db[idx].loopEnd = db[idx].items.length; 
+    localStorage.setItem(DB_KEY, JSON.stringify(db)); 
+    renderDbList(); 
+}
+
 function deleteDbPhase(idx, phaseIdx) { let db = JSON.parse(localStorage.getItem(DB_KEY)); if (db[idx].items.length <= 1) { alert("至少需要保留一個階段！"); return; } db[idx].items.splice(phaseIdx, 1); if (db[idx].loopEnd > db[idx].items.length) db[idx].loopEnd = db[idx].items.length; if (db[idx].loopStart > db[idx].items.length) db[idx].loopStart = db[idx].items.length; localStorage.setItem(DB_KEY, JSON.stringify(db)); renderDbList(); }
 function loadDbItem(idx) { let db = JSON.parse(localStorage.getItem(DB_KEY)); let item = db[idx]; config.items = JSON.parse(JSON.stringify(item.items)); config.loopStart = item.loopStart || 1; config.loopEnd = item.loopEnd || config.items.length; config.loops = item.loops || 1; renderMainTable(); fillSettingsForm(); uiUpdate(); closeDbModal(); }
-function addDbItem() { let db = JSON.parse(localStorage.getItem(DB_KEY)); db.push({ name: "新預設計畫", items: [{ bpm: 180, sec: 300, dist: 500 }], loopStart: 1, loopEnd: 1, loops: 1 }); localStorage.setItem(DB_KEY, JSON.stringify(db)); renderDbList(); }
+
+// 新增預設計畫：預設距離 1000m，且預設 2 階（第 2 階與第 1 階相同）
+function addDbItem() { 
+    let db = JSON.parse(localStorage.getItem(DB_KEY)); 
+    db.push({ 
+        name: "新預設計畫", 
+        items: [
+            { bpm: 180, sec: 300, dist: 1000 },
+            { bpm: 180, sec: 300, dist: 1000 }
+        ], 
+        loopStart: 1, 
+        loopEnd: 2, 
+        loops: 1 
+    }); 
+    localStorage.setItem(DB_KEY, JSON.stringify(db)); 
+    renderDbList(); 
+}
+
 function deleteDbItem(idx) { if(!confirm("確定要刪除這筆預設計畫？")) return; let db = JSON.parse(localStorage.getItem(DB_KEY)); db.splice(idx, 1); localStorage.setItem(DB_KEY, JSON.stringify(db)); renderDbList(); }
 
 function manualThresChange(v) { let num = parseFloat(v); if (!isNaN(num) && num > 0) { config.threshold = num; localStorage.setItem(CONFIG_KEY, JSON.stringify(config)); } }
@@ -370,14 +455,12 @@ async function toggleStart(isAuto) {
         let lEnd = config.loopEnd - 1;
         let lCount = config.loops || 1;
 
-        // 1. 跑循環前階段
         for (let i = 0; i < lStart; i++) {
             if (!isRunning) break;
             let item = config.items[i];
             await runPhase(`${i+1}階`, item.sec, item.bpm, 0, 1);
         }
 
-        // 2. 跑指定範圍的循環階段
         for (let l = 0; l < lCount; l++) {
             if (!isRunning) break;
             currentLoopIndex = l;
@@ -388,7 +471,6 @@ async function toggleStart(isAuto) {
             }
         }
 
-        // 3. 跑循環後階段
         for (let i = lEnd + 1; i < config.items.length; i++) {
             if (!isRunning) break;
             let item = config.items[i];
@@ -445,10 +527,9 @@ function runPhase(label, sec, bpm, loopIdx, totalLoops) {
             }
             remSec--;
             let loopText = (totalLoops > 1) ? ` (組${loopIdx+1}/${totalLoops})` : '';
-            document.getElementById('phaseDetail').innerText = `節拍:${currentRunningBPM}${loopText} | 剩:${remSec}s`;
+            document.getElementById('phaseDetail').innerText = `節拍:${currentRunningBPM}${loopText} \vert{} 剩:${remSec}s`;
             if (remSec <= 0) {
                 clearInterval(phaseTimer);
-                // 【核心修正點】：階段倒數結束時，立即記錄此階段成績
                 recordPhaseResult();
                 resolve();
             }
@@ -487,7 +568,7 @@ async function playBeepTick() {
         o.start(ctx.currentTime); 
         o.stop(ctx.currentTime + 0.1);
         
-        document.getElementById('soundIndicator').innerText = `第 ${km+1}k | ${isHigh?'高音':'低音'} | 里程:${(totalDist/1000).toFixed(3)}k`;
+        document.getElementById('soundIndicator').innerText = `第 ${km+1}k | ${isHigh?'高音':'低音'} \vert{} 里程:${(totalDist/1000).toFixed(3)}k`;
     } catch(e) {}
 }
 
@@ -578,7 +659,6 @@ function stopAndSave() {
     timerId = null; 
     navigator.geolocation.clearWatch(watchId);
     
-    // 【核心修正點】：如果手動長按結束，且最後一個階段尚未被結算，在此進行最後記錄
     if (currentPhaseName !== "") {
         recordPhaseResult();
         currentPhaseName = "";
